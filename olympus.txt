@@ -1,0 +1,39 @@
+config = list(nium_of_replicas);
+crpto_hash_functions = list(num_of_replicas);
+
+function is_valid_result_proof(result_proof, result) {
+   for all replica in replicas:
+        if(crpto_hash_functions(replica)[result] != result_proof[replica] ){
+            return false;
+        }
+
+   return true;     
+}
+
+function reconfigure(result_proof, result) {
+    if(!is_valid_result_proof(result_proof, result) {
+        olympus.reconfigure();    
+    })    
+}
+
+function reconfigure() {
+    sendToAll("WEDGED_REQUEST", config.replicas);
+}
+
+function create_correct_history(senders, histories) {
+    new_history = map();
+
+    for all slot in union(histories.slot):
+        new_history[slot] = majority(histories[slot]); 
+        
+    return new_history;
+}
+
+// will be called once all of the replicas have replied to the WEDGED_REQUEST
+olympus.receive_from_all("WEDGED_RESPONSE",senders, histories) {
+    new_history = olympus.createCorrectHistory(senders, histories);
+    num_of_replicas = system.destory_all_replicas;
+    system.create_new_replicas(num_of_replicas);
+    sendToAll("INITHIST", replicas, new_history);
+}
+

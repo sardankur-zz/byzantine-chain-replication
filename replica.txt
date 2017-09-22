@@ -1,0 +1,140 @@
+// TODO
+// 1. active state
+// 2. checkpointing
+
+replica.run();
+replica.config = NULL;
+replica.result_cache = map();
+replica.WAIT_TIME = 10 seconds;
+
+function run() {    
+    replica.state = ACTIVE;
+}
+
+struct shuttle {    
+    order_proof = list();
+    result_proof = list();
+}
+
+replica.receive("TRANSMIT_REQUEST", sender, request_number, operation_info, client, shuttle) {
+    
+    config = olympus.get_latest_configuration();
+
+    if(config.head == self) {
+        // client & shuttle is NULL for head                
+
+        slot = replica.getNextSlotNumber(operation_info);
+
+        result = replica.process_operation(operation_info);
+
+        result_hashes = replica.crypto_hash(result, self.hmac_private_keys);                        
+
+        shuttle = new shuttle();
+        
+        order_proofs = crypto_sign(tuple(slot, operation_info), self.hmac_private_keys)
+        shuttle.order_proof.add(order_proofs);
+
+        result_proofs = crypto_sign(tuple(slot, result_hash), self.hmac_private_keys)
+        shuttle.result_proof.add(result_proofs);
+
+        self.history.add(order_proofs);
+
+        send("TRANSMIT_REQUEST", config.successor[self], request_number, operation_info, sender, shuttle);
+    } 
+    else {        
+
+        if(verify_order_proof(shuttle.order_proof) && verify_result_proof(shuttle.result_proof)) {
+
+            self.history.add(shuttle);
+
+            slot = get_slot(shuttle.order_proof);
+
+            result = replica.process_operation(operation_info);
+
+            result_hashes = replica.crypto_hash(result, self.hmac_private_keys);                        
+
+            order_proofs = crypto_sign(tuple(slot, operation_info), self.hmac_private_keys)
+            shuttle.order_proof.add(order_proofs);
+
+            self.history.add(order_proofs);
+
+            result_proofs = crypto_sign(tuple(slot, result_hash), self.hmac_private_keys)
+            shuttle.result_proof.add(result_proofs);
+            
+            if(config.tail != self) {                
+                send("TRANSMIT_REQUEST", config.successor[self], request_number, operation_info, client, shuttle);                                
+            }
+            else {
+                send("TRANSMIT_REQUEST_REPLY", client, request_number, result_proof, result);
+
+                self.result_cache[request_number] = tuple(slot, result, shuttle);
+                
+                send("TRANSMIT_RESULT_SHUTTLE", config.successor[self], request_number, slot, shuttle, result);                
+            }
+        } 
+        else {
+            replica.state = IMMUTABLE;
+            olympus.reconfigure();
+        }
+    }
+}
+
+replica.receive("TRANSMIT_RESULT_SHUTTLE", sender, request_number, slot, shuttle, result) {
+    if(verify_order_proof(shuttle.order_proof) && verify_result_proof(shuttle.result_proof)) {
+        config = olympus.get_latest_configuration();
+        self.result_cache[request_number] = tuple(slot, result, shuttle);
+        if(self != HEAD) {        
+            send("TRANSMIT_RESULT_SHUTTLE", config.successor[self], message.request_number, slot, shuttle, result);                
+        } 
+        else if(active_timer("RETRANSMIT_REQUEST_TIMER)) {
+            cancel_timer("RETRANSMIT_REQUEST_TIMER");               
+            send("TRANSMIT_REQUEST_REPLY", client, request_number, shuttle.result_proof, result);                        
+        }
+    }    
+}
+
+replica.receive("GET_RESULT_REQUEST", client, request_number) {
+    
+    if(replica.state == IMMUTABLE) {
+        send("GET_RESULT_REQUEST_REPLY", client, "IMMUTABLE_REPLICA_ERR");                
+    } 
+    else if(request_number in result_cache) {
+        
+        result = self.result_cache[request_number][1];
+        shuttle = self.result_cache[request_number][2];
+
+        send("GET_RESULT_REQUEST", client, request_number, result, shuttle.result_proof);                
+    }
+}
+
+// only for head
+replica.receive("RETRANSMIT_REQUEST", client, request_number, operation_info) {
+    if(request_message.request_number in result_cache) {
+        
+        result = self.result_cache[request_number][1];
+        shuttle = self.result_cache[request_number][2];
+
+        send("GET_RESULT_REQUEST", client, request_number, result, shuttle.result_proof);                
+    } 
+    else if(request_number in self.history) {
+        start_timer("RETRANSMIT_REQUEST_TIMER", replica.WAIT_TIME, request_number);
+    } 
+    else {        
+        send("TRANSMIT_REQUEST", self, request_number, operation_info);
+    }
+}
+
+replica.timer_expiry("RETRANSMIT_REQUEST_TIMER", request_number) {
+    replica.state = IMMUTABLE;
+    olympus.reconfigure();
+}
+
+replica.receive("WEDGED_REQUEST", olympus) {
+    self.state = IMMUTABLE;
+    send("WEDGED_RESPONSE", olympus, self.history);
+}
+
+replica.receive("INITHIST", olympus, history) {
+    self.history = history;
+    self.state = ACTIVE;    
+}

@@ -1,0 +1,323 @@
+// ------------------------------------------------------------------------------------------------------
+// Client
+// ------------------------------------------------------------------------------------------------------
+
+client.MAX_WAIT_TIME = 10 seconds
+
+client.getNextOperationFromApp() {
+    // gets next operation from application
+    return tuple(object, operation);
+}
+
+client.sendResultToApp(object, operation, result) {
+    // sends result to application
+}
+
+client.validateResult(node, message) {
+
+    // if node sends message
+    if(!util.signedBy(node, message)) {
+        return false;
+    } 
+
+    if(util.check_hash(message)) {
+
+    }
+
+
+}
+
+client.getConfiguration(object) {
+    // get latest configuration from olympus for object
+    return olympus.getConfiguration(object);
+}
+
+// Functions
+client.run() {
+
+    // infinite loop
+    while(1) {
+        
+        // get next operation from application
+        // blocking call
+        object, operation = client.getNextOperationFromApp();
+        
+        C = client.getConfiguration(object);
+        
+        request_number = client.getNextRequestNumber(object);
+        
+        message = tuple(object, operation, request_number);
+        
+        send(C.head, "doOperation", message);        
+
+        // start timeout
+        timer("doOperationTimeout", message, client.MAX_WAIT_TIME);
+    }
+}
+
+client.receive("doOperationTimeout", message) {
+    C = client.getConfiguration(message.object);
+
+    // restransmit to all nodes
+    send(C.nodes, "getResult", message);
+
+    timer("getResultTimeout", message, client.MAX_WAIT_TIME);
+}
+
+
+client.receive("operationResult", node, message) {
+    
+    // check if result already received
+
+    // validate response
+    
+    if(!message.request_number in result) {
+
+        cancel_timer(message)
+
+        client.sendResultToApp(object, operation, result);
+
+        result.add(request_number);
+    }
+}
+
+client.receieve("operationResultFailure", node, message) {
+
+}
+
+client.receive("doOperationTimeout", message) {
+    C = client.getConfiguration(message.object);
+
+    // restransmit to all nodes
+    send(C.head, "restransmitDoOperation", message);
+
+    timer("getResultTimeout", message, client.MAX_WAIT_TIME);
+}
+
+client.receive()
+
+
+
+
+// run many instances of client
+client.run();
+
+// ------------------------------------------------------------------------------------------------------
+// Olympus
+// ------------------------------------------------------------------------------------------------------
+
+
+// Data Structures
+
+// queue of size 10
+olympus.configurations = queue(10)
+
+olympus.init() {
+    
+}
+
+// functions
+olympus.initHist() {
+    INITIAL_NUM_NODES = 4;
+    C = configuration(INITIAL_NUM_NODES, key, )
+}
+
+olympus.requestReconfiguration() {
+    
+}
+
+olympus.getConfiguration(key) {
+
+}
+
+
+// ------------------------------------------------------------------------------------------------------
+// Node
+// ------------------------------------------------------------------------------------------------------
+
+// Data Structures
+
+// head.slot_number;
+// node.configuration = dictionary()
+
+// Node operations
+head.getNextSlotNumber(key) {
+
+}
+
+node.getConfiguration(key) {
+    if(key in node.configuration) 
+        return node.configuration[key];
+    // check validity
+    else return olympus.getConfiguration(key);
+}
+
+node.isOrderProofValid(order_proof) {
+
+}
+
+node.isResultProofValid(result_proof) {
+
+}
+
+
+node.orderCommand(rho, C, s, o, proof) {
+    // check if it is last node, then send to client
+    // send result shuttle back
+    // else
+    // check validity
+    // C.nodes[node].next.orderCommand() : call the next one in order
+}
+
+node.becomeImmutable() {
+
+}
+
+// APIs
+
+@API
+head.doOperation(client, key, operation) {
+    // check if valid operation
+    
+    // check if client is valid else ignore    
+    if(util.isValidEntity(client.crypto_key)) return INVALID_SENDER;
+
+    // check if immutable
+    if(head.immutable) return ERR;    
+
+    // Valid client
+
+    // get configuration for key 
+    configuration = node.getConfiguration(key);
+    
+    // do the operation
+    r = operation.function(key, operation.args);
+
+    // compute hash of the result
+    result_hash = util.crypto_hash(r);
+
+    // next slot number
+    slot = head.getNextSlotNumber(key);
+
+    order_proof = tuple(slot, operation, head, head.configuration, 
+        list(tuple(order, slot, operation)));
+    result_proof = tuple(slot, result_hash, head, list(tuple(result, slot, hash)))
+    
+    // cryptofy
+    // make it into a shuttle
+    send(configuration.successor_node(head), key, slot, operation, order_proof, result_proof)    
+}
+
+@API
+node.doOperation(sender, key, slot, operation, order_proof, result_proof) {
+    
+    // check if sender is valid        
+    if(util.isValidEntity(sender.crypto_key)) return INVALID_SENDER;
+    
+    // check if immutable
+    if(node.immutable) return ERR;    
+
+    // get configuration for key 
+    configuration = node.getConfiguration(key);
+    
+    // do the operation
+    r = operation.function(key, operation.args);
+
+    // compute hash of the result
+    result_hash = util.crypto_hash(r);
+
+    // check if order_proof and result_proof are correct
+    if(!node.isOrderProofValid(slot, operation, order_proof) 
+        || !node.isResultProofValid(slot, result_hash, result_proof)) {
+        
+        // become immutable
+        node.becomeImmutable();
+
+        // send request for reconfiguration
+        olympus.reconfigure();        
+        
+        return INVALID;
+    }
+
+    // Valid
+    node.addToOrderProof(node, slot, operation, order_proof);
+    node.addToResultProof(node, slot, result_hash, result_proof); 
+
+    // cryptofy
+    send(configuration.successor_node(node), key, slot, operation, order_proof, result_proof);
+}
+
+@API
+tail.doOperation(sender, key, operation) {
+    
+    // check if sender is valid        
+    if(util.isValidEntity(sender.crypto_key)) return INVALID_SENDER;
+    
+    // check if immutable
+    if(node.immutable) return ERR;    
+
+    // get configuration for key 
+    configuration = node.getConfiguration(key);
+    
+    // do the operation
+    r = operation.function(key, operation.args);
+
+    // compute hash of the result
+    result_hash = util.crypto_hash(r);
+
+    // check if order_proof and result_proof are correct
+    if(!node.isOrderProofValid(slot, operation, order_proof) 
+        || !node.isResultProofValid(slot, result_hash, result_proof)) {
+        
+        // become immutable
+        node.becomeImmutable();
+
+        // send request for reconfiguration
+        olympus.reconfigure();        
+        
+        return INVALID;
+    }
+
+    // Valid
+    node.addToOrderProof(node, slot, operation, order_proof);
+    node.addToResultProof(node, slot, result_hash, result_proof); 
+
+    // cryptofy
+    send(client, key, result_hash, result_proof);
+
+    // cache result
+
+    // reverse result shuttle
+    node.doCacheResult(configuration.predecessor_node(tail), result_shuttle);
+}
+
+@API
+node.doCacheResult(sender, result_shuttle) {
+
+}
+
+@API 
+node.getResult(client, key) {
+    
+}
+
+
+// ------------------------------------------------------------------------------------------------------
+// Utilities
+// ------------------------------------------------------------------------------------------------------
+
+util.isValidEntity(crypto_key) {
+
+}
+
+util.crypto_hash(key) {
+
+}
+
+
+
+
+// ------------------------------------------------------------------------------------------------------
+
+// Program Start
+olympus.init();

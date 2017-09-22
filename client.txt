@@ -1,0 +1,109 @@
+// start the client service
+client.run();
+
+client.pending_request = map();
+client.WAIT_TIME = 10 seconds;
+
+funciton create_request(operation_info) {   
+    request_number = get_next_request_number();    
+    client.pending_request[request_number] = operation_info;
+    return request_number;
+}
+
+function run() {
+    
+    while(True) {
+        
+        operation_info = application.get_operation_from_app();
+
+        config = olympus.get_latest_configuration();
+        
+        request_number = client.create_request(operation_info);
+
+        start_timer("TRANSMIT_REQUEST_TIMER", client.WAIT_TIME, request_number);        
+        
+        send("TRANSMIT_REQUEST", config.head, request_number, operation_info);
+    } 
+}
+
+function is_valid_result_proof(result_proof, result) {
+   for all replica in replicas:
+        if(crpto_hash_functions(replica)[result] != result_proof[replica] ){
+            return false;
+        }
+
+   return true;     
+}
+
+client.receive("TRANSMIT_REQUEST_REPLY", sender, request_number, result_proof, result) {
+    
+    if(is_valid_result_proof(result_proof, result)) {
+        
+        cancel_timer("TRANSMIT_REQUEST_TIMER", request_number);
+        
+        client.pending_request.delete(request_number);
+        
+        application.send_result_to_application(result);
+    }
+}
+
+
+client.timer_expiry("TRANSMIT_REQUEST_TIMER", request_number) {
+
+    config = olympus.get_latest_configuration();        
+
+    start_timer("GET_RESULT_REQUEST_TIMER", client.WAIT_TIME, request_number);        
+        
+    sendToAll("GET_RESULT_REQUEST",  config.nodes, request_number);
+}
+
+client.receive_from_any("GET_RESULT_REQUEST_REPLY", sender, request_number, 
+        result_proof, result, error) {    
+
+    if(error == "IMMUTABLE_REPLICA_ERR") {
+            
+        cancel_timer("GET_RESULT_REQUEST_TIMER", request_number);
+        
+        config = olympus.get_latest_configuration();
+
+        operation_info = client.pending_request[request_number];
+
+        send("TRANSMIT_REQUEST", config.head, request_number, operation_info); 
+    }
+    else if(!is_valid_result_proof(result_proof, result)) {
+
+        cancel_timer("GET_RESULT_REQUEST_TIMER", request_number);
+
+        config = olympus.reconfigure(result_proof, result);
+
+        operation_info = client.pending_request[request_number];
+
+        send("TRANSMIT_REQUEST", config.head, request_number, operation_info); 
+    }
+    else {
+        
+        cancel_timer(response_message.request_number);
+        
+        client.pending_request.delete(response_message.request_number);
+        
+        application.send_result_to_application(response_message);        
+    }
+}
+
+
+client.timer_expiry("GET_RESULT_REQUEST_TIMER", request_number, operation_info) {
+
+    config = olympus.get_latest_configuration();
+
+    operation_info = client.pending_request[request_number];
+
+    start_timer("RETRANSMIT_REQUEST_TIMER", client.WAIT_TIME, request_number);        
+
+    send("RETRANSMIT_REQUEST", config.head, request_number, operation_info);
+}
+
+
+client.timer_expiry("RETRANSMIT_REQUEST_TIMER", request_number) {
+    // can't help it. drop the request
+    client.pending_request.delete(request_number);
+}

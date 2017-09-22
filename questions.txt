@@ -1,0 +1,5 @@
+1. If d is signed by rho, then is rho a correct replica? Can a faulty/adverserial replica sign d and the signature be valid?
+2. On Page 4, the paper says, initially in C1 all replicas are active and all other configurations are pending. How can a non existant configuration have pending replica state? 
+3. Can there be more or less number of replicas in two successive configurations?
+4. Does result shuttle include order proofs and result proof or just the result proof?
+5. I am unclear as to what precautions do we have if the head is incorrect, do we verify this using result proof?
