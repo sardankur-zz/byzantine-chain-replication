@@ -1,7 +1,6 @@
 import sys
 import logging
 
-
 ## code for logging
 
 def get_logger():
@@ -35,19 +34,27 @@ class Operation():
     @staticmethod
     def put(dictionary, key, val):
         dictionary[key] = val
-
+        return 'OK'
     @staticmethod
     def get(dictionary, key):
-        return dictionary[key]
+        return dictionary.get(key,'')
 
     @staticmethod
     def slice(dictionary, key, slice):
         split = slice.split(":")
-        dictionary[key] = dictionary[key][int(split[0]): int(split[1])]
+        if key in dictionary.keys(): #TODO: check whether slice is valid or not
+            dictionary[key] = dictionary[key][int(split[0]): int(split[1])]
+            return 'OK'
+        else:    
+            return 'fail'
 
     @staticmethod
     def append(dictionary, key, val):
-        dictionary[key] = dictionary[key] + val
+        if key in dictionary.keys():
+            dictionary[key] = dictionary[key] + val
+            return 'OK'
+        else:    
+            return 'fail'   
 
     @staticmethod
     def do_op(op, dictionary, key, val=None):
@@ -92,8 +99,9 @@ class Replica(process):
 
     def receive(msg=('Reverse_Shuttle',), from_=p):
         output("Reverse_Shuttle Recieved at replicaNum=", replicaNum)
-        output("Reverse Shuttle Advanced from replicaNum=", replicaNum)
-        send(('Reverse_Shuttle',), to=prev)
+        if(prev):
+            output("Reverse Shuttle Advanced from replicaNum=", replicaNum)
+            send(('Reverse_Shuttle',), to=prev)
 
     def run():
         output("Start Running replicaNum=", replicaNum)
@@ -139,4 +147,15 @@ def main():
         start(replicas[i])
 
     send(('Client_Request',), to=replicas[0])
+    
+    dictionary = {}
+    temp = Operation.do_op('get', dictionary, 'movie')
+    output(temp)
+    Operation.do_op('put', dictionary, 'movie', 'star')
+    Operation.do_op('append', dictionary, 'movie', ' wars')
+    temp = Operation.do_op('get', dictionary, 'movie')
+    output(temp)
+    Operation.do_op('slice', dictionary, 'movie', '5:9')
+    temp = Operation.do_op('get', dictionary, 'movie')
+    output(temp)
 
