@@ -1,5 +1,8 @@
 import sys
 import logging
+import time
+import nacl.encoding
+import nacl.signing
 
 
 ## code for logging
@@ -27,11 +30,11 @@ def get_logger():
 
     return logger
 
-
 logger = get_logger()
 
 
 class Operation():
+
     @staticmethod
     def put(dictionary, key, val):
         dictionary[key] = val
@@ -43,7 +46,7 @@ class Operation():
     @staticmethod
     def slice(dictionary, key, slice):
         split = slice.split(":")
-        dictionary[key] = dictionary[key][int(split[0]): int(split[1])]
+        dictionary[key] = dictionary[key][int(split[0]) : int(split[1])]
 
     @staticmethod
     def append(dictionary, key, val):
@@ -62,81 +65,146 @@ class Operation():
         else:
             raise Exception("Invalid Operation")
 
+class Olympus(process):
+    def setup(head_timeout: int, nonhead_timeout: int, t: int):
+        self.on = True
+        self.configs = []
+        logger.info(self.log("Initialized"))
 
-class Olympus():
-    def reconfigure(self):
-        pass
+
+    def log(message):
+        return "OLYMPUS : %s" % (message)
+
+    # receivers
+    def run():
+        await(self.on == False)
+
+    def receive(msg=('latest_configuration',), from_=p):
+        assert len(self.configs) > 0
+        logger.info(self.log("Request for latest configuration"))
+        send(('latest_configuration', self.configs[len(self.configs) - 1]), to=p)
+
+    # Not required to check proofs now
+    def receive(msg=('reconfigure', proof), from_=p):
+        logger.info(self.log("Request for reconfiguration"))
+        config = Config()
+        # initializing replicas
+        config.replicas = new(Replica, num=2*t + 1)
+        start(config.replicas)
+        self.configs.append(config)
+
+    def receive(msg=("shutdown",), from_=p):
+        logger.info(self.log("Request for shutdown"))
+        # replicas = self.configs[len(self.configs) - 1].replicas)
+        # send(('shutdown',), to=replicas)
+        # await(each(replica in replicas, has=receive(('shut',), from_=replica)))
+        # end(replicas)
+        send(('shut',), to=p)
+        self.on = False
 
 
-class Client():
-    pass
+
+class Config():
+    def __init__(self):
+        self.replicas = []
+
+class Client(process):
+
+    def setup(cid: int, client_timeout: int):
+        self.latest_config = None
+        self.on = True
+        self.log("Initialized")
+
+    def log(message):
+        return "CLIENT : %s" % (message)
+
+    def run():
+        await(self.on == False)
+
+    def receive(msg=('client_request', op, key, val)):
+        send(('client_request', op, key, val), to=self.latest_config.head)
+        if(await(received(('client_response',)))):
+            pass
+        elif timeout(self.client_timeout):
+            # what to do?
+            pass
+
+    def receive(msg=("shutdown",), from_=p):
+        logger.info(self.log("Request for shutdown"))
+        send(('shut',), to=p)
+        self.on = False
 
 
 class Replica(process):
-    def setup(replicaNum: int, prev: Replica, nextr: Replica):
-        output("Setup completed for replicaNum=", replicaNum)
+    def setup(replicaNum:int, prev: Replica, nextr:Replica):
+        output("Setup completed for replicaNum=",replicaNum)
 
     def receive(msg=('Shuttle',), from_=p):
-        output("Shuttle Recieved at replicaNum=", replicaNum)
-        if (nextr):
-            output("Shuttle Forwarded from replicaNum=", replicaNum)
+        output("Shuttle Recieved at replicaNum=",replicaNum)
+        if(nextr):
+            output("Shuttle Forwarded from replicaNum=",replicaNum)
             send(('Shuttle',), to=nextr)
         else:
-            output("Reverse_Shuttle Started from replicaNum=", replicaNum)
+            output("Reverse_Shuttle Started from replicaNum=",replicaNum)
             send(('Reverse_Shuttle',), to=prev)
 
     def receive(msg=('Client_Request',), from_=p):
-        output("Client request Recieved at replicaNum=", replicaNum)
-        output("Shuttle Forwarded from replicaNum=", replicaNum)
+        output("Client request Recieved at replicaNum=",replicaNum)
+        output("Shuttle Forwarded from replicaNum=",replicaNum)
         send(('Shuttle',), to=nextr)
 
     def receive(msg=('Reverse_Shuttle',), from_=p):
-        output("Reverse_Shuttle Recieved at replicaNum=", replicaNum)
-        output("Reverse Shuttle Advanced from replicaNum=", replicaNum)
+        output("Reverse_Shuttle Recieved at replicaNum=",replicaNum)
+        output("Reverse Shuttle Advanced from replicaNum=",replicaNum)
         send(('Reverse_Shuttle',), to=prev)
 
     def run():
-        output("Start Running replicaNum=", replicaNum)
-        while (True):
+        output("Start Running replicaNum=",replicaNum)
+        while(True):
             await(0 > 1)
-        output("End Running replicaNum=", replicaNum)
+        output("End Running replicaNum=",replicaNum)
 
 
 def read_configuration(filename):
-    config = {}
+    logger.info("Reading Test Configuration")
+    test_config = {}
     with open('config.txt', 'r') as f:
         for line in f:
             if line[0] != '#':
                 (key, sep, val) = line.partition('=')
                 if len(sep) != 0:
                     val = val.strip()
-                    config[key.strip()] = int(val) if str.isdecimal(val) else val
-    print(config)
-    return config
-
-
-def run_test(config):
-    pass
+                    test_config[key.strip()] = int(val) if str.isdecimal(val) else val
+    return test_config
 
 
 def main():
-    config(clock='Lamport')
+    test_config = read_configuration(sys.argv[1])
 
-    rnum = 5
-    replicas = [];
-    for i in range(rnum):
-        replica = new(Replica, num=1)
-        replicas.append(replica)
+    # start olympus
+    olympus = new(Olympus, [test_config['head_timeout'], test_config['nonhead_timeout']], num=1)
+    start(olympus)
+    time.sleep(2)
 
-    setup(replicas[0], (0, None, replicas[1]))
+    send(('reconfigure', None), to=olympus)
+    # Wait for reconfiguration
 
-    for i in range(1, rnum - 1):
-        setup(replicas[i], (i, replicas[i - 1], replicas[i + 1]))
+    # start clients
+    clients = new(Client, num = 2 * test_config['t'] + 1)
+    for i, client in enumerate(clients):
+        setup(client, (i, test_config['client_timeout']))
+    start(clients)
 
-    setup(replicas[rnum - 1], (rnum - 1, replicas[rnum - 2], None))
+    time.sleep(2)
 
-    for i in range(rnum):
-        start(replicas[i])
+    # shutdown system
+    send(("shutdown",), to=clients)
+    send(("shutdown",), to=olympus)
 
-    send(('Client_Request',), to=replicas[0])
+    await(each(c in clients, has=received(('shut',), from_=c)))
+    logger.info("Clients are shut")
+
+    await(some(received(('shut',), from_=olympus)))
+    logger.info("Olympus is shut")
+
 
