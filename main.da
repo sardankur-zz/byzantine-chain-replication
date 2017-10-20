@@ -42,7 +42,8 @@ class Operation():
 
     @staticmethod
     def slice(dictionary, key, slice):
-        pass
+        split = slice.split(":")
+        dictionary[key] = dictionary[key][int(split[0]) : int(split[1])]
 
     @staticmethod
     def append(dictionary, key, val):
