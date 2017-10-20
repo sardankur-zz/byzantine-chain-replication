@@ -1,0 +1,53 @@
+import sys
+
+class Replica(process):
+    def setup(replicaNum:int, prev: Replica, nextr:Replica): 
+        output("Setup completed for replicaNum=",replicaNum)
+    
+    def receive(msg=('Shuttle',), from_=p):
+        output("Shuttle Recieved at replicaNum=",replicaNum)
+        if(nextr):
+            output("Shuttle Forwarded from replicaNum=",replicaNum)
+            send(('Shuttle',), to=nextr)
+        else:
+            output("Reverse_Shuttle Started from replicaNum=",replicaNum)
+            send(('Reverse_Shuttle',), to=prev)    
+
+    def receive(msg=('Client_Request',), from_=p):
+        output("Client request Recieved at replicaNum=",replicaNum)
+        output("Shuttle Forwarded from replicaNum=",replicaNum)
+        send(('Shuttle',), to=nextr)
+
+    def receive(msg=('Reverse_Shuttle',), from_=p):
+        output("Reverse_Shuttle Recieved at replicaNum=",replicaNum)
+        output("Reverse Shuttle Advanced from replicaNum=",replicaNum)
+        send(('Reverse_Shuttle',), to=prev)    
+
+    def run():
+        output("Start Running replicaNum=",replicaNum)
+        while(True):
+            await(0 > 1)
+        output("End Running replicaNum=",replicaNum)        
+            
+
+def main():
+    config(clock='Lamport')
+    
+    rnum = 5    
+    replicas = [];
+    for i in range(rnum):
+        replica = new(Replica, num=1)
+        replicas.append(replica)
+    
+    setup(replicas[0],(0, None, replicas[1]))
+
+    for i in range(1, rnum-1):
+        setup(replicas[i], (i , replicas[i-1], replicas[i+1]))
+
+    setup(replicas[rnum - 1], (rnum-1, replicas[rnum - 2], None))
+    
+    for i in range(rnum):
+        start(replicas[i])
+
+    send(('Client_Request',), to = replicas[0])  
+
