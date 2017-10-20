@@ -1,7 +1,44 @@
 import sys
 import logging
+#import nacl.signing
 
-## code for logging
+
+class OpArgs():
+    def __init__(self, opType, key, val=None):
+        self.opType = opType
+        self.key = key
+        self.val = val   
+
+    def __str__(self):
+        return "%s - %s - %s" % (self.opType, self.key, self.val)
+
+class OrderStatement():
+    def __init__(self, slot_number, operation, signature):
+        self.slot_number = slot_number
+        self.operation = operation
+        self.signature = signature
+
+    def __str__(self):
+        return "%s - %s - %s" % (self.slot_number, self.operation, self.signature)
+
+class ResultStatement():
+    def __init__(self, operation, result_hash, signature):
+        self.operation = operation
+        self.result_hash = result_hash
+        self.signature = signature
+
+    def __str__(self):
+        return "%s - %s - %s" % (self.operation, self.result_hash, self.signature)
+
+class Shuttle():
+    def __init__(self, opArgs):
+        self.opArgs = opArgs  
+        self.order_proof = []
+        self.result_proof = []
+
+    def __str__(self):
+        return str("Opt Args : %s\norder_proof: %s\nresult_proof: %s" % (self.opArgs, self.order_proof, self.result_proof))
+
 
 def get_logger():
     logger = logging.getLogger('byzantine_state_replication')
@@ -57,15 +94,15 @@ class Operation():
             return 'fail'   
 
     @staticmethod
-    def do_op(op, dictionary, key, val=None):
-        if op == 'put':
-            return Operation.put(dictionary, key, val)
-        elif op == 'get':
-            return Operation.get(dictionary, key)
-        elif op == 'slice':
-            return Operation.slice(dictionary, key, val)
-        elif op == 'append':
-            return Operation.append(dictionary, key, val)
+    def do_op(dictionary, opArgs):
+        if opArgs.opType == 'put':
+            return Operation.put(dictionary, opArgs.key, opArgs.val)
+        elif opArgs.opType == 'get':
+            return Operation.get(dictionary, opArgs.key)
+        elif opArgs.opType == 'slice':
+            return Operation.slice(dictionary, opArgs.key, opArgs.val)
+        elif opArgs.opType == 'append':
+            return Operation.append(dictionary, opArgs.key, opArgs.val)
         else:
             raise Exception("Invalid Operation")
 
@@ -79,35 +116,64 @@ class Client():
     pass
 
 
+
+
+
+
+
+
+
+
 class Replica(process):
+
     def setup(replicaNum: int, prev: Replica, nextr: Replica):
+        self.slot_number = 0
+        self.dictionary = {}
         output("Setup completed for replicaNum=", replicaNum)
-
-    def receive(msg=('Shuttle',), from_=p):
-        output("Shuttle Recieved at replicaNum=", replicaNum)
-        if (nextr):
-            output("Shuttle Forwarded from replicaNum=", replicaNum)
-            send(('Shuttle',), to=nextr)
-        else:
-            output("Reverse_Shuttle Started from replicaNum=", replicaNum)
-            send(('Reverse_Shuttle',), to=prev)
-
-    def receive(msg=('Client_Request',), from_=p):
-        output("Client request Recieved at replicaNum=", replicaNum)
-        output("Shuttle Forwarded from replicaNum=", replicaNum)
-        send(('Shuttle',), to=nextr)
-
-    def receive(msg=('Reverse_Shuttle',), from_=p):
-        output("Reverse_Shuttle Recieved at replicaNum=", replicaNum)
-        if(prev):
-            output("Reverse Shuttle Advanced from replicaNum=", replicaNum)
-            send(('Reverse_Shuttle',), to=prev)
 
     def run():
         output("Start Running replicaNum=", replicaNum)
         while (True):
             await(0 > 1)
-        output("End Running replicaNum=", replicaNum)
+        output("End Running replicaNum=", replicaNum)    
+
+    def receive(msg=('Client_Request', opArgs), from_=p):
+        output("Client request Recieved at replicaNum=", replicaNum)
+        slot_number = slot_number + 1;
+        shuttle = Shuttle(opArgs)
+        shuttle.order_proof.append(OrderStatement(slot_number, opArgs, 'fakeSign')) #sign 
+        result = Operation.do_op(dictionary, opArgs)
+        shuttle.result_proof.append(ResultStatement(opArgs, result, 'fakeSign')) #sign and result Hash
+        output("Shuttle Forwarded from replicaNum=", replicaNum)
+        send(('Shuttle',shuttle), to=nextr)
+
+    def receive(msg=('Shuttle', shuttle), from_=p):
+        output("Shuttle Recieved at replicaNum=", replicaNum)
+        slot_number = slot_number + 1;
+        shuttle.order_proof.append(OrderStatement(slot_number, shuttle.opArgs, 'fakeSign'))
+        result = Operation.do_op( dictionary, shuttle.opArgs)
+        shuttle.result_proof.append(ResultStatement(shuttle.opArgs, result, 'fakeSign'))
+        
+        if (nextr):
+            output("Shuttle Forwarded from replicaNum=", replicaNum)
+            send(('Shuttle',shuttle), to=nextr)
+        else:
+            output("Reverse_Shuttle Started from replicaNum=", replicaNum)
+            output(shuttle)
+            send(('Reverse_Shuttle',shuttle.result_proof), to=prev)
+
+    def receive(msg=('Reverse_Shuttle',result_proof), from_=p):
+        output("Reverse_Shuttle Recieved at replicaNum=", replicaNum)
+        #cache the result proof
+        if(prev):
+            output("Reverse Shuttle Advanced from replicaNum=", replicaNum)
+            send(('Reverse_Shuttle',result_proof), to=prev)
+
+
+
+
+
+
 
 
 def read_configuration(filename):
@@ -146,8 +212,9 @@ def main():
     for i in range(rnum):
         start(replicas[i])
 
-    send(('Client_Request',), to=replicas[0])
+    send(('Client_Request',OpArgs('put', 'movie', 'star')), to=replicas[0])
     
+    '''
     dictionary = {}
     temp = Operation.do_op('get', dictionary, 'movie')
     output(temp)
@@ -158,4 +225,4 @@ def main():
     Operation.do_op('slice', dictionary, 'movie', '5:9')
     temp = Operation.do_op('get', dictionary, 'movie')
     output(temp)
-
+    '''
