@@ -1,4 +1,74 @@
 import sys
+import logging
+
+
+## code for logging
+
+def get_logger():
+    logger = logging.getLogger('byzantine_state_replication')
+    logger.setLevel(logging.DEBUG)
+
+    # file handler
+    fh = logging.FileHandler('byzantine.log')
+    fh.setLevel(logging.DEBUG)
+
+    # console handler
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+
+    formatter = logging.Formatter('%(asctime)s : %(levelname)s : %(message)s')
+
+    ch.setFormatter(formatter)
+    fh.setFormatter(formatter)
+
+    # add the handlers to logger
+    logger.addHandler(ch)
+    logger.addHandler(fh)
+
+    return logger
+
+logger = get_logger()
+
+
+class Operation():
+
+    @staticmethod
+    def put(dictionary, key, val):
+        dictionary[key] = val
+
+    @staticmethod
+    def get(dictionary, key):
+        return dictionary[key]
+
+    @staticmethod
+    def slice(dictionary, key, slice):
+        pass
+
+    @staticmethod
+    def append(dictionary, key, val):
+        dictionary[key] = dictionary[key] + val
+
+    @staticmethod
+    def do_op(op, dictionary, key, val=None):
+        if op == 'put':
+            return Operation.put(dictionary, key, val)
+        elif op == 'get':
+            return Operation.get(dictionary, key)
+        elif op == 'slice':
+            return Operation.slice(dictionary, key, val)
+        elif op == 'append':
+            return Operation.append(dictionary, key, val)
+        else:
+            raise Exception("Invalid Operation")
+
+class Olympus():
+
+    def reconfigure(self):
+        pass
+
+class Client():
+    pass
+
 
 class Replica(process):
     def setup(replicaNum:int, prev: Replica, nextr:Replica): 
@@ -28,9 +98,25 @@ class Replica(process):
         while(True):
             await(0 > 1)
         output("End Running replicaNum=",replicaNum)        
-            
+
+
+def read_configuration(filename):
+    config = {}
+    with open('config.txt', 'r') as f:
+        for line in f:
+            if line[0] != '#':
+                (key, sep, val) = line.partition('=')
+                if len(sep) != 0:
+                    val = val.strip()
+                    config[key.strip()] = int(val) if str.isdecimal(val) else val
+    print(config)
+    return config
+
+def run_test(config):
+    pass
 
 def main():
+
     config(clock='Lamport')
     
     rnum = 5    
@@ -49,5 +135,5 @@ def main():
     for i in range(rnum):
         start(replicas[i])
 
-    send(('Client_Request',), to = replicas[0])  
+    send(('Client_Request',), to = replicas[0])
 
