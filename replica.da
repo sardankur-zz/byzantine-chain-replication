@@ -12,7 +12,7 @@ logger = get_logger("REPLICA")
 
 class Replica(process):
     
-    def setup(rid: int, prevr: Replica, nextr: Replica, head: Replica):
+    def setup(rid: int, prevr: Replica, nextr: Replica, head: Replica, tail: Replica):
         self.on = True
         self.slot_number = 0
         self.dictionary = {}
@@ -55,5 +55,6 @@ class Replica(process):
             send(('reverse_shuttle', result_proof), to=prevr)
 
     def receive(msg=('shutdown',), from_=p):
+        logger.info("Request for shutdown")
         send(('shut',), to=p)
         self.on = False

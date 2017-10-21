@@ -41,12 +41,13 @@ class Olympus(process):
         config.replicas = new(Replica, num=2 * t + 1)
 
         replica_list = list(config.replicas)
-        head = replica_list[0]
+        config.head = replica_list[0]
+        config.tail = replica_list[len(replica_list) - 1]
 
-        setup(replica_list[0], (0, None, replica_list[1], head))
+        setup(replica_list[0], (0, None, replica_list[1], config.head, config.tail))
         for i in range(1, 2*t):
-            setup(replica_list[i], (i, replica_list[i-1], replica_list[i+1], head))
-        setup(replica_list[2*t], (2*t, replica_list[2*t - 1], None, head))
+            setup(replica_list[i], (i, replica_list[i-1], replica_list[i+1], config.head, config.tail))
+        setup(replica_list[2*t], (2*t, replica_list[2*t - 1], None, config.head, config.tail))
 
         start(config.replicas)
         self.configs.append(config)

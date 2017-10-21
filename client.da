@@ -1,10 +1,12 @@
 get_logger = import_da("app_logging").get_logger
 
+Olympus = import_da("olympus").Olympus
+
 logger = get_logger("CLIENT")
 
 class Client(process):
 
-    def setup(cid: int, client_timeout: int):
+    def setup(cid: int, client_timeout: int, olympus: Olympus):
         self.latest_config = None
         self.on = True
         logger.info("Initialized")
@@ -13,15 +15,27 @@ class Client(process):
         return "CLIENT : %s" % (message)
 
     def run():
+
+        send('latest_configuration', to=olympus)
+        await(some(received(('latest_configuration', config)), has=received(('latest_configuration', config), from_=olympus)))
+        self.latest_config = config
+
         await(self.on == False)
+        logger.info("Shut")
 
     def receive(msg=('client_request', op, key, val)):
+        send('latest_configuration', to=olympus)
+        await(some(received(('latest_configuration', config), from_=olympus)))
+        self.latest_config = config
+
         send(('client_request', op, key, val), to=self.latest_config.head)
         if(await(received(('client_response',)))):
             pass
         elif timeout(self.client_timeout):
             # what to do?
             pass
+
+
 
     def receive(msg=("shutdown",), from_=p):
         logger.info("Request for shutdown")

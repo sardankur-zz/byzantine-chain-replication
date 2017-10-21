@@ -30,7 +30,6 @@ def main():
     # start olympus
     olympus = new(Olympus, [test_config['head_timeout'], test_config['nonhead_timeout'], test_config['t']], num=1)
     start(olympus)
-    time.sleep(2)
 
     send(('init',), to=olympus)
     # Wait for reconfiguration
@@ -38,10 +37,8 @@ def main():
     # start clients
     clients = new(Client, num = 2 * test_config['t'] + 1)
     for i, client in enumerate(clients):
-        setup(client, (i, test_config['client_timeout']))
+        setup(client, (i, test_config['client_timeout'], olympus))
     start(clients)
-
-    time.sleep(2)
 
     # run the test
 
@@ -53,5 +50,5 @@ def main():
     await(each(c in clients, has=received(('shut',), from_=c)))
     logger.info("Clients are shut")
 
-    await(some(received(('shut',), from_=olympus)))
+    await(each(o in olympus, has=received(('shut',), from_=o)))
     logger.info("Olympus is shut")

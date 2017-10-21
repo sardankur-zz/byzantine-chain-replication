@@ -79,6 +79,5 @@ class Operation():
 class Config():
     def __init__(self):
         self.replicas = None
-        self.replicaList = None
         self.head = None
         self.tail = None
