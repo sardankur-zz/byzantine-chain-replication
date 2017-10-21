@@ -1,0 +1,59 @@
+get_logger = import_da("app_logging").get_logger
+Replica = import_da("replica").Replica
+
+logger = get_logger("OLYMPUS")
+
+class Olympus(process):
+
+
+    def setup(head_timeout: int, nonhead_timeout: int, t: int):
+        self.on = True
+        self.configs = []
+        logger.info("Initialized")
+
+
+    # receivers
+    def run():
+        await(self.on == False)
+
+
+    def receive(msg=('latest_configuration',), from_=p):
+
+        assert len(self.configs) > 0
+
+        logger.info("Request for latest configuration")
+        send(('latest_configuration', self.configs[len(self.configs) - 1]), to=p)
+
+
+    # Not required now
+    def receive(msg=('reconfigure', proof), from_=p):
+        pass
+
+
+    def receive(msg=('init',), from_=p):
+        logger.info("Request for configuration")
+
+        config = Config()
+        # initializing replicas
+        config.replicas = new(Replica, num=2 * t + 1)
+
+        replica_list = list(config.replicas)
+        head = replica_list[0]
+
+        setup(replica_list[0], (None, replica_list[1], head))
+        for i in range(2*t):
+            setup(replica_list[i], (replica_list[i-1], replica_list[i+1], head))
+        setup(replica_list[2*t], (replica_list[2*t - 1], None, head))
+
+        start(config.replicas)
+        self.configs.append(config)
+
+
+    def receive(msg=("shutdown",), from_=p):
+        logger.info("Request for shutdown")
+        replicas = self.configs[len(self.configs) - 1].replicas)
+        send(('shutdown',), to=replicas)
+        await(each(replica in replicas, has=received(('shut',), from_=replica)))
+        send(('shut',), to=p)
+        self.on = False
+

@@ -1,0 +1,29 @@
+get_logger = import_da("app_logging").get_logger
+
+logger = get_logger("CLIENT")
+
+class Client(process):
+
+    def setup(cid: int, client_timeout: int):
+        self.latest_config = None
+        self.on = True
+        logger.info("Initialized")
+
+    def log(message):
+        return "CLIENT : %s" % (message)
+
+    def run():
+        await(self.on == False)
+
+    def receive(msg=('client_request', op, key, val)):
+        send(('client_request', op, key, val), to=self.latest_config.head)
+        if(await(received(('client_response',)))):
+            pass
+        elif timeout(self.client_timeout):
+            # what to do?
+            pass
+
+    def receive(msg=("shutdown",), from_=p):
+        logger.info("Request for shutdown")
+        send(('shut',), to=p)
+        self.on = False

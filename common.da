@@ -1,0 +1,84 @@
+class OpArgs():
+    def __init__(self, opType, key, val=None):
+        self.opType = opType
+        self.key = key
+        self.val = val
+
+    def __str__(self):
+        return "%s - %s - %s" % (self.opType, self.key, self.val)
+
+class OrderStatement():
+    def __init__(self, slot_number, operation, signature):
+        self.slot_number = slot_number
+        self.operation = operation
+        self.signature = signature
+
+    def __str__(self):
+        return "%s - %s - %s" % (self.slot_number, self.operation, self.signature)
+
+class ResultStatement():
+    def __init__(self, operation, result_hash, signature):
+        self.operation = operation
+        self.result_hash = result_hash
+        self.signature = signature
+
+    def __str__(self):
+        return "%s - %s - %s" % (self.operation, self.result_hash, self.signature)
+
+class Shuttle():
+    def __init__(self, opArgs):
+        self.opArgs = opArgs
+        self.order_proof = []
+        self.result_proof = []
+
+    def __str__(self):
+        return str("Opt Args : %s\norder_proof: %s\nresult_proof: %s" % (self.opArgs, self.order_proof, self.result_proof))
+
+
+class Operation():
+
+    @staticmethod
+    def put(dictionary, key, val):
+        dictionary[key] = val
+        return 'OK'
+    @staticmethod
+    def get(dictionary, key):
+        return dictionary.get(key,'')
+
+    @staticmethod
+    def slice(dictionary, key, slice):
+        split = slice.split(":")
+        if key in dictionary.keys(): #TODO: check whether slice is valid or not
+            dictionary[key] = dictionary[key][int(split[0]): int(split[1])]
+            return 'OK'
+        else:
+            return 'fail'
+
+    @staticmethod
+    def append(dictionary, key, val):
+        if key in dictionary.keys():
+            dictionary[key] = dictionary[key] + val
+            return 'OK'
+        else:
+            return 'fail'
+
+    @staticmethod
+    def do_op(dictionary, opArgs):
+        if opArgs.opType == 'put':
+            return Operation.put(dictionary, opArgs.key, opArgs.val)
+        elif opArgs.opType == 'get':
+            return Operation.get(dictionary, opArgs.key)
+        elif opArgs.opType == 'slice':
+            return Operation.slice(dictionary, opArgs.key, opArgs.val)
+        elif opArgs.opType == 'append':
+            return Operation.append(dictionary, opArgs.key, opArgs.val)
+        else:
+            raise Exception("Invalid Operation")
+
+
+class Config():
+    def __init__(self):
+        self.replicas = None
+        self.replicaList = None
+        self.head = None
+        self.tail = None

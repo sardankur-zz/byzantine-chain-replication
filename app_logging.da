@@ -1,0 +1,24 @@
+import logging
+
+def get_logger(name):
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+
+    # file handler
+    fh = logging.FileHandler('byzantine.log')
+    fh.setLevel(logging.DEBUG)
+
+    # console handler
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+
+    formatter = logging.Formatter('%(asctime)s : %(name)s : %(levelname)s : %(message)s')
+
+    ch.setFormatter(formatter)
+    fh.setFormatter(formatter)
+
+    # add the handlers to logger
+    logger.addHandler(ch)
+    logger.addHandler(fh)
+
+    return logger
