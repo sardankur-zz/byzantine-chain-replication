@@ -1,3 +1,6 @@
+import json
+import random
+
 class OpArgs():
     def __init__(self, opType, key, val=None):
         self.opType = opType
@@ -58,11 +61,14 @@ class Operation():
     @staticmethod
     def slice(dictionary, key, slice):
         split = slice.split(":")
-        if key in dictionary.keys(): #TODO: check whether slice is valid or not
-            dictionary[key] = dictionary[key][int(split[0]): int(split[1])]
-            return 'OK'
-        else:
-            return 'fail'
+        if key in dictionary.keys():  # TODO: check whether slice is valid or not
+            try:
+                dictionary[key] = dictionary[key][int(split[0]): int(split[1])]
+                return 'OK'
+            except:
+                pass
+
+        return 'fail'
 
     @staticmethod
     def append(dictionary, key, val):
@@ -85,9 +91,38 @@ class Operation():
         else:
             raise Exception("Invalid Operation")
 
+    @staticmethod
+    def generate_requests(seed, n):
+        random.seed(seed)
+        ops = ['put', 'get', 'slice', 'append']
+        keys = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+        vals = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+        opSequence = []
+
+        for i in range(n):
+            op = ops[random.randint(0, len(ops) - 1)]
+            key = keys[random.randint(0, len(keys) - 1)]
+            val = vals[random.randint(0, len(vals) - 1)]
+            if op == 'slice':
+                opSequence.append([op, key, "%d:%d" % (random.randint(0, 3), random.randint(0,5))])
+            else:
+                opSequence.append([op, key, val])
+
+        return opSequence
 
 class Config():
     def __init__(self):
         self.replicas = None
         self.head = None
         self.tail = None
+
+class ReplicaState():
+    def __init__(self, rid, dictionary):
+        self.rid = rid
+        self.dictionary = dictionary
+
+    def __repr__(self):
+        return str(self)
+
+    def __str__(self):
+        return json.dumps(self.__dict__)

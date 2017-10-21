@@ -1,3 +1,5 @@
+import json
+
 get_logger = import_da("app_logging").get_logger
 Replica = import_da("replica").Replica
 
@@ -12,6 +14,7 @@ class Olympus(process):
     def setup(head_timeout: int, nonhead_timeout: int, t: int):
         self.on = True
         self.configs = []
+        self.default_timeout = 3
         logger.info("Initialized")
 
 
@@ -54,7 +57,18 @@ class Olympus(process):
         logger.info("Request for shutdown")
         replicas = self.configs[len(self.configs) - 1].replicas
         send(('shutdown',), to=replicas)
-        await(each(replica in replicas, has=received(('shut',), from_=replica)))
-        send(('shut',), to=p)
+        replica_state = None
+
+        if await(len(setof(p, received(('shut', replica_state), from_=p))) == len(list(replicas))):
+            replica_states = setof(replica_state, received(('shut', replica_state), from_=p))
+        elif timeout(self.default_timeout):
+            replica_states = setof(replica_state, received(('shut', replica_state), from_=p))
+
+        deserialized_states = []
+        for replica_state in replica_states:
+            replica_state = json.loads(replica_state)
+            deserialized_states.append(replica_state)
+
+        send(('shut', json.dumps(deserialized_states)), to=p)
         self.on = False
 
