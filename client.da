@@ -1,15 +1,22 @@
+from enum import Enum
 get_logger = import_da("app_logging").get_logger
 common = import_da("common")
 OpArgs = common.OpArgs
-
 logger = get_logger("CLIENT")
+
+
+class ClientMode(Enum):
+    ACTIVE = 0
+    AWAITING = 1
+    KILLED = 2
 
 class Client(process):
 
     def setup(cid: int, client_timeout: int, workload:list):
         self.latest_config = None
-        self.on = True
+        self.mode = ClientMode.ACTIVE
         self.workArgs = []
+        self.workIndex = 0
         for work in workload:
             if(len(work) < 3):
                 self.workArgs.append(OpArgs(work[0], work[1]))
@@ -23,10 +30,16 @@ class Client(process):
         return "CLIENT : %s" % (message)
 
     def run():
-        await(self.on == False)
+        #send(('client_request', workArgs[workIndex]), to=self.latest_config.head)
+        workIndex += 1
 
-    def receive(msg=('client_request', op, key, val)):
-        send(('client_request', op, key, val), to=self.latest_config.head)
+        await(self.mode == ClientMode.KILLED)
+
+    def receive(msg=('client_request', opArgs)):
+        if workIndex < len(workArgs):
+            send(('client_request', workArgs[workIndex]), to=self.latest_config.head)
+            workIndex += 1
+
         if(await(received(('client_response',)))):
             pass
         elif timeout(self.client_timeout):
@@ -34,6 +47,6 @@ class Client(process):
             pass
 
     def receive(msg=("shutdown",), from_=p):
-        logger.info("Request for shutdown")
+        logger.info("Request for shutdown cid = %d" % (cid))
         send(('shut',), to=p)
-        self.on = False
+        self.mode = ClientMode.KILLED
