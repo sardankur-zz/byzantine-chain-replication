@@ -28,6 +28,7 @@ class Client(process):
         logger.info("Initialized with Workload : %s" % (str(self.workArgs)))
 
     def run():
+        logger.info("Running")
         for workIndex in range(len(self.workArgs)):
             send(('latest_configuration',), to=olympus)
             await(some(received(('latest_configuration', config)), has=config is not None))
@@ -39,8 +40,8 @@ class Client(process):
                 # what to do?
                 pass
 
-        await(self.on == False)        
-        logger.info("Shutting cid = %d" % (cid))
+        await(self.on == False)
+        logger.info("Terminated")
 
 
     def receive(msg=("shutdown",), from_=p):

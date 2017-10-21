@@ -1,10 +1,14 @@
 import sys
 import time
 import re
+import json
 
+common = import_da("common")
+Operation = common.Operation
 get_logger = import_da("app_logging").get_logger
 Olympus = import_da("olympus").Olympus
 Client = import_da("client").Client
+
 
 logger = get_logger("MAIN")
 
@@ -44,21 +48,37 @@ def main():
         for line in workload_lines:
             line = line.replace("'", "")
             words = re.split('[(),]+',line.strip())
-            opSequence.append(words[:-1])         
+            opSequence.append(words[:-1])
+
+        if opSequence[0][0] == 'pseudorandom':
+            opSequence = Operation.generate_requests(int(opSequence[0][1]), int(opSequence[0][2]))
+
         setup(client, (i, test_config['client_timeout'], opSequence, olympus))
         
     start(clients)
 
     time.sleep(0.2)
-    # run the test
-
 
     # shutdown system
     send(("shutdown",), to=clients)
-    send(("shutdown",), to=olympus)
 
     await(each(c in clients, has=received(('shut',), from_=c)))
     logger.info("Clients are shut")
 
-    await(each(o in olympus, has=received(('shut',), from_=o)))
+    send(("shutdown",), to=olympus)
+
+    if await(len(setof(p, received(('shut', replica_state), from_=p))) == 1):
+        replica_states = setof(replica_state, received(('shut', replica_state), from_=p))
+        replica_states = json.loads(next(iter(replica_states)))
+        if 'test_workload' in test_config.keys():
+            for i, item in enumerate(replica_states):
+                if test_config['test_workload'] != str(item['dictionary']):
+                    logger.error("Replica rid=%d in inconsistent state = %s" % (item['rid'], item['dictionary']))
+                else:
+                    logger.info("Replica rid=%d in consistent state = %s" % (item['rid'], item['dictionary']))
+
+        # check validity for each test case
+    elif timeout(test_config['client_timeout']):
+        logger.error("Timeout from olympus")
+
     logger.info("Olympus is shut")
