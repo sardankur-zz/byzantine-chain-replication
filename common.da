@@ -1,3 +1,4 @@
+
 class OpArgs():
     def __init__(self, opType, key, val=None):
         self.opType = opType
@@ -35,14 +36,15 @@ class ResultStatement():
         return "%s - %s - %s" % (self.operation, self.result_hash, self.signature)
 
 class Shuttle():
-    def __init__(self, opArgs, client):
-        self.client = client
+    def __init__(self, slot_number, opArgs, client):
+        self.slot_number = slot_number
         self.opArgs = opArgs
+        self.client = client
         self.order_proof = []
         self.result_proof = []
 
     def __str__(self):
-        return str("Opt Args : %s\norder_proof: %s\nresult_proof: %s" % (self.opArgs, self.order_proof, self.result_proof))
+        return str("Slot_number: %d\nOpt Args : %s\norder_proof: %s\nresult_proof: %s" % (self.slot_number, self.opArgs, self.order_proof, self.result_proof))
 
 
 class Operation():
@@ -91,3 +93,5 @@ class Config():
         self.replicas = None
         self.head = None
         self.tail = None
+        self.private_keys = []
+        self.public_keys = []
