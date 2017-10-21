@@ -32,7 +32,7 @@ def main():
     start(olympus)
     time.sleep(2)
 
-    send(('init', None), to=olympus)
+    send(('init',), to=olympus)
     # Wait for reconfiguration
 
     # start clients
