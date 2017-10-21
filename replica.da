@@ -1,3 +1,5 @@
+import logging
+
 get_logger = import_da("app_logging").get_logger
 common = import_da("common")
 
@@ -16,42 +18,53 @@ class Replica(process):
         self.on = True
         self.slot_number = 0
         self.dictionary = {}
-        logger.info("Setup completed for rid %d" % rid)
+
+        # set logging
+        formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(name)s " + str(self.rid) + " : %(message)s")
+        for handler in logger.handlers:
+            handler.setFormatter(formatter)
+
+        logger.info("Initialized")
 
     def run():
-        logger.info("Start Running rid %d" % rid)
+        logger.info("Running")
         await(self.on == False)
-        logger.info("End Running rid %d" % rid)
+        logger.info("Terminated")
 
     def receive(msg=('client_request', opArgs), from_=p):
-        logger.info("Client request Received at rid %d with op  args %s" % (rid, opArgs))
+
+        logger.info("Client request received with op args %s" % (opArgs))
+
         self.slot_number = self.slot_number + 1;
         shuttle = Shuttle(opArgs)
         shuttle.order_proof.append(OrderStatement(self.slot_number, opArgs, 'fakeSign'))  # sign
         result = Operation.do_op(dictionary, opArgs)
         shuttle.result_proof.append(ResultStatement(opArgs, result, 'fakeSign'))  # sign and result Hash
-        logger.info("Shuttle Started from rid %d" % rid)
+
+        logger.info("Shuttle Started")
         send(('shuttle', shuttle), to=nextr)
 
     def receive(msg=('shuttle', shuttle), from_=p):
-        logger.info("Shuttle Received at rid %d" % rid)
+
+        logger.info("Shuttle Received")
+
         self.slot_number = self.slot_number + 1;
         shuttle.order_proof.append(OrderStatement(self.slot_number, shuttle.opArgs, 'fakeSign'))
         result = Operation.do_op(dictionary, shuttle.opArgs)
         shuttle.result_proof.append(ResultStatement(shuttle.opArgs, result, 'fakeSign'))
 
         if (nextr):
-            logger.info("Shuttle Forwarded from rid %d" % rid)
+            logger.info("Shuttle Forwarded")
             send(('shuttle', shuttle), to=nextr)
         else:
-            logger.info("Reverse Shuttle Started from rid %d" % rid)
+            logger.info("Reverse Shuttle Started")
             send(('reverse_shuttle', shuttle.result_proof), to=prevr)
 
     def receive(msg=('reverse_shuttle', result_proof), from_=p):
-        logger.info("Reverse Shuttle Received at rid %d" % rid)
+        logger.info("Reverse Shuttle Received")
         # cache the result proof
         if (prevr):
-            output("Reverse Shuttle Forwarded from rid=", rid)
+            output("Reverse Shuttle Forwarded")
             send(('reverse_shuttle', result_proof), to=prevr)
 
     def receive(msg=('shutdown',), from_=p):

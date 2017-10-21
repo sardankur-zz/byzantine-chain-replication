@@ -1,3 +1,5 @@
+import logging
+
 from enum import Enum
 get_logger = import_da("app_logging").get_logger
 common = import_da("common")
@@ -18,24 +20,25 @@ class Client(process):
         self.mode = ClientMode.ACTIVE
         self.workArgs = []
         self.workIndex = 0
+
+        formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(name)s " + str(self.cid) + " : %(message)s")
+        for handler in logger.handlers:
+            handler.setFormatter(formatter)
+
         for work in workload:
             if(len(work) < 3):
                 self.workArgs.append(OpArgs(work[0], work[1]))
             else:
                 self.workArgs.append(OpArgs(work[0], work[1], work[2]))  
 
-        logger.info('Workload for cid = %d is = %s' % (cid, str(self.workArgs)))
-        logger.info("Initialized")
-
-    def log(message):
-        return "CLIENT : %s" % (message)
+        logger.info("Initialized with Workload : %s" % (str(self.workArgs)))
 
     def run():
+        logger.info("Running")
         #send(('client_request', workArgs[workIndex]), to=self.latest_config.head)
         workIndex += 1
-
-        await(self.mode == ClientMode.KILLED)        
-        logger.info("Shut")
+        await(self.mode == ClientMode.KILLED)
+        logger.info("Terminated")
 
     def receive(msg=('client_request', opArgs)):
         send(('latest_configuration',), to=olympus)
@@ -53,6 +56,6 @@ class Client(process):
 
 
     def receive(msg=("shutdown",), from_=p):
-        logger.info("Request for shutdown cid = %d" % (cid))
+        logger.info("Request for shutdown")
         send(('shut',), to=p)
         self.mode = ClientMode.KILLED
