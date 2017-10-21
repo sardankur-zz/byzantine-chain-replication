@@ -8,7 +8,7 @@ logger = get_logger("CLIENT")
 
 class Client(process):
 
-    def setup(cid: int, client_timeout: int, workload:list, olympus: Olympus):
+    def setup(cid: int, client_timeout: int, workload:list, olympus):
         self.latest_config = None
         self.on = True
         self.workArgs = []
@@ -25,17 +25,15 @@ class Client(process):
         return "CLIENT : %s" % (message)
 
     def run():
-
-        send('latest_configuration', to=olympus)
-        await(some(received(('latest_configuration', config)), has=received(('latest_configuration', config), from_=olympus)))
+        send(('latest_configuration',), to=olympus)
+        await(some(received(('latest_configuration', config)), has=config is not None))
         self.latest_config = config
-
         await(self.on == False)
         logger.info("Shut")
 
     def receive(msg=('client_request', op, key, val)):
-        send('latest_configuration', to=olympus)
-        await(some(received(('latest_configuration', config), from_=olympus)))
+        send(('latest_configuration',), to=olympus)
+        await(some(received(('latest_configuration', config)), has=config is not None))
         self.latest_config = config
 
         send(('client_request', op, key, val), to=self.latest_config.head)

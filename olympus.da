@@ -21,9 +21,6 @@ class Olympus(process):
 
 
     def receive(msg=('latest_configuration',), from_=p):
-
-        assert len(self.configs) > 0
-
         logger.info("Request for latest configuration")
         send(('latest_configuration', self.configs[len(self.configs) - 1]), to=p)
 
@@ -34,7 +31,7 @@ class Olympus(process):
 
 
     def receive(msg=('init',), from_=p):
-        logger.info("Request for configuration")
+        logger.info("Initializing Olympus")
 
         config = Config()
         # initializing replicas
