@@ -61,7 +61,7 @@ class Replica(process):
             else:
                 try:     
                     public_keys[i].verify(orderStatement.signature) 
-                except ValueError:
+                except Exception:
                     logger.debug("Order Statement number = %d is not valid" % i)
                     return False 
             i = i + 1                 
