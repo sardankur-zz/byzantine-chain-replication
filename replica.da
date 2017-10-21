@@ -57,7 +57,7 @@ class Replica(process):
             send(('reverse_shuttle', result_proof), to=prevr)
                 
 
-    def receive(msg=('shutdown',), from_=p):
+    def receive(msg=('shutdown',dictionary), from_=p):
         logger.info("Request for shutdown")
         send(('shut',), to=p)
         self.on = False
