@@ -1,5 +1,7 @@
 import sys
 import time
+import re
+
 get_logger = import_da("app_logging").get_logger
 Olympus = import_da("olympus").Olympus
 Client = import_da("client").Client
@@ -18,7 +20,6 @@ def read_configuration(filename):
                     test_config[key.strip()] = int(val) if str.isdecimal(val) else val
     return test_config
 
-
 def main():
 
     if(len(sys.argv) != 2):
@@ -30,7 +31,7 @@ def main():
     # start olympus
     olympus = new(Olympus, [test_config['head_timeout'], test_config['nonhead_timeout'], test_config['t']], num=1)
     start(olympus)
-    time.sleep(2)
+    time.sleep(0.2)
 
     send(('init',), to=olympus)
     # Wait for reconfiguration
@@ -38,10 +39,18 @@ def main():
     # start clients
     clients = new(Client, num = 2 * test_config['t'] + 1)
     for i, client in enumerate(clients):
-        setup(client, (i, test_config['client_timeout']))
+        workload_string = test_config['workload['+str(i)+']'];
+        workload_lines = workload_string.split(';')
+        opSequence = []
+        for line in workload_lines:
+            line = line.replace("'", "")
+            words = re.split('[(),]+',line.strip())
+            opSequence.append(words[:-1])         
+        setup(client, (i, test_config['client_timeout'], opSequence))
+        
     start(clients)
 
-    time.sleep(2)
+    time.sleep(0.2)
 
     # run the test
 

@@ -1,12 +1,22 @@
 get_logger = import_da("app_logging").get_logger
+common = import_da("common")
+OpArgs = common.OpArgs
 
 logger = get_logger("CLIENT")
 
 class Client(process):
 
-    def setup(cid: int, client_timeout: int):
+    def setup(cid: int, client_timeout: int, workload:list):
         self.latest_config = None
         self.on = True
+        self.workArgs = []
+        for work in workload:
+            if(len(work) < 3):
+                self.workArgs.append(OpArgs(work[0], work[1]))
+            else:
+                self.workArgs.append(OpArgs(work[0], work[1], work[2]))  
+
+        logger.info('Workload for cid = %d is = %s' % (cid, str(self.workArgs)))
         logger.info("Initialized")
 
     def log(message):
