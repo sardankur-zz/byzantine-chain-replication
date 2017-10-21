@@ -5,17 +5,11 @@ OpArgs = common.OpArgs
 
 logger = get_logger("CLIENT")
 
-
-class ClientMode(Enum):
-    ACTIVE = 0
-    AWAITING = 1
-    KILLED = 2
-
 class Client(process):
 
     def setup(cid: int, client_timeout: int, workload:list, olympus):
         self.latest_config = None
-        self.mode = ClientMode.ACTIVE
+        self.on = True
         self.workArgs = []
         self.workIndex = 0
         for work in workload:
@@ -31,28 +25,22 @@ class Client(process):
         return "CLIENT : %s" % (message)
 
     def run():
-        #send(('client_request', workArgs[workIndex]), to=self.latest_config.head)
-        workIndex += 1
+        for workIndex in range(len(self.workArgs)):            
+            send(('latest_configuration',), to=olympus)
+            await(some(received(('latest_configuration', config)), has=config is not None))
+            self.latest_config = config
+            send(('client_request', workArgs[workIndex]), to=self.latest_config.head)            
+            if(await(some(received(('client_response', result, result_proof)), has=result is not None))):
+                continue
+            elif timeout(self.client_timeout): ###TODO: SEC TO MILISECOND timer
+                # what to do?
+                pass
 
-        await(self.mode == ClientMode.KILLED)        
-        logger.info("Shut")
-
-    def receive(msg=('client_request', opArgs)):
-        send(('latest_configuration',), to=olympus)
-        await(some(received(('latest_configuration', config)), has=config is not None))
-        self.latest_config = config
-        if workIndex < len(workArgs):
-            send(('client_request', workArgs[workIndex]), to=self.latest_config.head)
-            workIndex += 1
-        if(await(received(('client_response',)))):
-            pass
-        elif timeout(self.client_timeout):
-            # what to do?
-            pass
-
+        await(self.on == False)        
+        logger.info("Shutting cid = %d" % (cid))
 
 
     def receive(msg=("shutdown",), from_=p):
         logger.info("Request for shutdown cid = %d" % (cid))
         send(('shut',), to=p)
-        self.mode = ClientMode.KILLED
+        self.on = False

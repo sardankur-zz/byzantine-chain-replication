@@ -35,7 +35,8 @@ class ResultStatement():
         return "%s - %s - %s" % (self.operation, self.result_hash, self.signature)
 
 class Shuttle():
-    def __init__(self, opArgs):
+    def __init__(self, opArgs, client):
+        self.client = client
         self.opArgs = opArgs
         self.order_proof = []
         self.result_proof = []

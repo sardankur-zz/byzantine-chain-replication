@@ -26,7 +26,7 @@ class Replica(process):
     def receive(msg=('client_request', opArgs), from_=p):
         logger.info("Client request Received at rid %d with op  args %s" % (rid, opArgs))
         self.slot_number = self.slot_number + 1;
-        shuttle = Shuttle(opArgs)
+        shuttle = Shuttle(opArgs, p)
         shuttle.order_proof.append(OrderStatement(self.slot_number, opArgs, 'fakeSign'))  # sign
         result = Operation.do_op(dictionary, opArgs)
         shuttle.result_proof.append(ResultStatement(opArgs, result, 'fakeSign'))  # sign and result Hash
@@ -44,6 +44,8 @@ class Replica(process):
             logger.info("Shuttle Forwarded from rid %d" % rid)
             send(('shuttle', shuttle), to=nextr)
         else:
+            logger.info("Client Response sent from rid %d to pid = %s" % (rid, str(shuttle.client)))
+            send(('client_response', result, shuttle.result_proof), to=shuttle.client)
             logger.info("Reverse Shuttle Started from rid %d" % rid)
             send(('reverse_shuttle', shuttle.result_proof), to=prevr)
 
@@ -53,6 +55,7 @@ class Replica(process):
         if (prevr):
             output("Reverse Shuttle Forwarded from rid=", rid)
             send(('reverse_shuttle', result_proof), to=prevr)
+                
 
     def receive(msg=('shutdown',), from_=p):
         logger.info("Request for shutdown")
