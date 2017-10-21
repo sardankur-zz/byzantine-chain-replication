@@ -31,7 +31,6 @@ def main():
     # start olympus
     olympus = new(Olympus, [test_config['head_timeout'], test_config['nonhead_timeout'], test_config['t']], num=1)
     start(olympus)
-    time.sleep(0.2)
 
     send(('init',), to=olympus)
     # Wait for reconfiguration
@@ -46,12 +45,11 @@ def main():
             line = line.replace("'", "")
             words = re.split('[(),]+',line.strip())
             opSequence.append(words[:-1])         
-        setup(client, (i, test_config['client_timeout'], opSequence))
+        setup(client, (i, test_config['client_timeout'], opSequence, olympus))
         
     start(clients)
 
     time.sleep(0.2)
-
     # run the test
 
 
@@ -62,5 +60,5 @@ def main():
     await(each(c in clients, has=received(('shut',), from_=c)))
     logger.info("Clients are shut")
 
-    await(some(received(('shut',), from_=olympus)))
+    await(each(o in olympus, has=received(('shut',), from_=o)))
     logger.info("Olympus is shut")

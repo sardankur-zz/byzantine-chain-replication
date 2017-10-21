@@ -2,6 +2,7 @@ from enum import Enum
 get_logger = import_da("app_logging").get_logger
 common = import_da("common")
 OpArgs = common.OpArgs
+
 logger = get_logger("CLIENT")
 
 
@@ -12,7 +13,7 @@ class ClientMode(Enum):
 
 class Client(process):
 
-    def setup(cid: int, client_timeout: int, workload:list):
+    def setup(cid: int, client_timeout: int, workload:list, olympus):
         self.latest_config = None
         self.mode = ClientMode.ACTIVE
         self.workArgs = []
@@ -33,18 +34,23 @@ class Client(process):
         #send(('client_request', workArgs[workIndex]), to=self.latest_config.head)
         workIndex += 1
 
-        await(self.mode == ClientMode.KILLED)
+        await(self.mode == ClientMode.KILLED)        
+        logger.info("Shut")
 
     def receive(msg=('client_request', opArgs)):
+        send(('latest_configuration',), to=olympus)
+        await(some(received(('latest_configuration', config)), has=config is not None))
+        self.latest_config = config
         if workIndex < len(workArgs):
             send(('client_request', workArgs[workIndex]), to=self.latest_config.head)
             workIndex += 1
-
         if(await(received(('client_response',)))):
             pass
         elif timeout(self.client_timeout):
             # what to do?
             pass
+
+
 
     def receive(msg=("shutdown",), from_=p):
         logger.info("Request for shutdown cid = %d" % (cid))
