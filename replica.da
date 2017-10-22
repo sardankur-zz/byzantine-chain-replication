@@ -246,7 +246,7 @@ class Replica(process):
                     logger.error("Reconfigure at client_request_forward")
         else:
             # just wait for the status of the cache to change
-            if await(requestCache.get((cid, requestIndex), None) == 'Responded'):
+            if await(retransmitCache.get((cid, requestIndex), None) == 'Responded'):
                 send(('head_responded_to_retransmit',cid, requestIndex), to=p)
             elif timeout(head_timeout/1000):          
                 logger.error("Reconfigure at client_request_forward from p =%s", str(p))
