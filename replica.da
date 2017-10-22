@@ -174,9 +174,9 @@ class Replica(process):
                 else:
                     logger.error('Reconfigure: client_retransmit_request empty cache on confiramtion receipt cid = %d and requestIndex = %d' % (cid, requestIndex))
 
-            elif timeout(nonhead_timeout/1000):
+            elif timeout(nonhead_timeout):
                 logger.error('Reconfigure: Client_request_forward timeout cid = %d and requestIndex = %d' % (cid, requestIndex))
-                pass
+                
    
 
 
@@ -212,8 +212,10 @@ class Replica(process):
                     send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)
                     retransmitCache[(cid, requestIndex)] = 'Responded'
                     send(('head_responded_to_retransmit',cid, requestIndex), to=p)
-                elif timeout(head_timeout/1000):
+
+                elif timeout(head_timeout):
                     logger.error("Reconfigure: head timed out waiting for result shuttle for the operation in queue for cid = %d and requestIndex = %d" % (cid, requestIndex))
+
             
             # unrecognized operation
             else:
@@ -265,8 +267,10 @@ class Replica(process):
                     retransmitCache[(cid, requestIndex)] = 'Responded'
                     send(('head_responded_to_retransmit',cid, requestIndex), to=p)
                     pass
-                elif timeout(head_timeout/1000):
+
+                elif timeout(head_timeout):
                     logger.error("Reconfigure: head timeout waiting for result_shuttle on newly created request cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
+
         else:
      
             logger.info("Waiting on Forwarded request for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
@@ -275,8 +279,10 @@ class Replica(process):
             if await(retransmitCache.get((cid, requestIndex), None) == 'Responded'):
                 logger.info("Head responded to Forwarded request for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
                 send(('head_responded_to_retransmit',cid, requestIndex), to=p)
-            elif timeout(head_timeout/1000):          
+
+            elif timeout(head_timeout):          
                 logger.error("Reconfigure: head_timeout on waiting for the head_to_respond_retransmit for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
+
 
 
 
