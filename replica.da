@@ -150,28 +150,32 @@ class Replica(process):
         # send from result cache if available 
         resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
         if resultShuttle is not None:
-            logger.info("Replying to retransmit request from cid = %d and requestIndex = %d" % (cid, requestIndex))
             if rid == 0:
                 retransmitCache[(cid,requestIndex)] = 'Responded'
+
+            logger.info("Replying to retransmit request from resultCache. cid = %d and requestIndex = %d" % (cid, requestIndex))   
             send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=p)
             return 
         
-        # otherwise forward request to head (even if we are head)
+        # otherwise forward request to head (even if we are head)       
+        logger.info('Forwarding request to head for cid = %d requestIndex = %d' % (cid, requestIndex))
         send(('client_request_forward', opArgs, cid, requestIndex, rid), to=head)
-        logger.info('Forwarding request to head for opArgs = %s cid = %d requestIndex = %d' % (opArgs, cid, requestIndex))
 
         # start a timer if not head
         if(rid != 0):
             if(await(some(received(('head_responded_to_retransmit', cid1, requestIndex1)), has=(requestIndex1 == requestIndex and cid1 == cid)))):    
+                
+                logger.info('Head responded to retransmit request for cid = %d requestIndex = %d' % (opArgs, cid, requestIndex))
                 resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
 
                 if resultShuttle is not None: # this can still result none (unlikely), in that case the replica should reconfigure
                     logger.info("Replying to retransmit request from cid = %d and requestIndex = %d" % (cid, requestIndex))
                     send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=p)
                 else:
-                    logger.error('Reconfigure at client_retransmit_request empty cache cid = %d and requestIndex = %d' % (cid, requestIndex))
+                    logger.error('Reconfigure: client_retransmit_request empty cache on confiramtion receipt cid = %d and requestIndex = %d' % (cid, requestIndex))
+
             elif timeout(nonhead_timeout/1000):
-                logger.error('Reconfigure at client_retransmit_request timeout cid = %d and requestIndex = %d' % (cid, requestIndex))
+                logger.error('Reconfigure: Client_request_forward timeout cid = %d and requestIndex = %d' % (cid, requestIndex))
                 pass
    
 
@@ -179,12 +183,14 @@ class Replica(process):
     # Only For Head 
     def receive(msg=('client_request_forward', opArgs, cid, requestIndex, sourceRid), from_=p):
         
-        logger.info("Received Forwarded request for opArgs = %s cid = %d requestIndex = %d from rid = %d" % (opArgs, cid, requestIndex, sourceRid))
+        logger.info("Received Forwarded request for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
 
         #if this is first forwarded request received at the head
         if retransmitCache.get((cid, requestIndex), None) is None:
             retransmitCache[(cid, requestIndex)] = 'inProcess'
             
+            logger.info("Processing Forwarded request for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
+
             # send from result cache if available 
             resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
             if resultShuttle is not None:
@@ -201,11 +207,13 @@ class Replica(process):
                 if await(some(received(('result_shuttle', resultShuttle)), has = resultShuttle.cid == cid and resultShuttle.requestIndex == requestIndex)):
                     time.sleep(0.1)
                     resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
+
+                    logger.info("Head responding, waiting for result shuttle for the operation in queue for cid = %d and requestIndex = %d" % (cid, requestIndex))
                     send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)
                     retransmitCache[(cid, requestIndex)] = 'Responded'
                     send(('head_responded_to_retransmit',cid, requestIndex), to=p)
                 elif timeout(head_timeout/1000):
-                    logger.error("Reconfigure at client_request_forward")
+                    logger.error("Reconfigure: head timed out waiting for result shuttle for the operation in queue for cid = %d and requestIndex = %d" % (cid, requestIndex))
             
             # unrecognized operation
             else:
@@ -246,22 +254,29 @@ class Replica(process):
                 send(('shuttle', shuttle), to=nextr)
 
                 self.incr(self.client_requests, cid)
-
+                 
+                logger.info("Waiting on result_shuttle on newly created request for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid)) 
                 if await(some(received(('result_shuttle', resultShuttle)),has = resultShuttle.cid == cid and resultShuttle.requestIndex == requestIndex)):
                     time.sleep(0.1)
                     resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
+                    logger.info("result_shuttle on newly created request for arrived cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid)) 
+
                     send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)
                     retransmitCache[(cid, requestIndex)] = 'Responded'
                     send(('head_responded_to_retransmit',cid, requestIndex), to=p)
                     pass
                 elif timeout(head_timeout/1000):
-                    logger.error("Reconfigure at client_request_forward")
+                    logger.error("Reconfigure: head timeout waiting for result_shuttle on newly created request cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
         else:
+     
+            logger.info("Waiting on Forwarded request for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
+
             # just wait for the status of the cache to change
             if await(retransmitCache.get((cid, requestIndex), None) == 'Responded'):
+                logger.info("Head responded to Forwarded request for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
                 send(('head_responded_to_retransmit',cid, requestIndex), to=p)
             elif timeout(head_timeout/1000):          
-                logger.error("Reconfigure at client_request_forward from p =%s", str(p))
+                logger.error("Reconfigure: head_timeout on waiting for the head_to_respond_retransmit for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
 
 
 
@@ -270,7 +285,7 @@ class Replica(process):
         logger.info("Shuttle Received\t\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(shuttle.cid, shuttle.requestIndex,shuttle.slot_number))
 
         if not isOrderProofValid(shuttle.slot_number, shuttle.opArgs, shuttle.order_proof):
-            logger.error("Order Proof is not valid")
+            logger.error("Reconfigure: Order Proof is not valid cid = %d requestIndex = %d slot_number = %d" % (shuttle.cid, shuttle.requestIndex, shuttle.slot_number))
             # send wedged statement to olympus
             return
          
