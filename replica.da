@@ -174,6 +174,7 @@ class Replica(process):
         
         self.incr(self.shuttle_requests, shuttle.cid)
 
+
     def receive(msg=('result_shuttle', resultShuttle), from_=p):
         logger.info("Result Shuttle Received")
 
@@ -192,6 +193,26 @@ class Replica(process):
             send(('result_shuttle', resultShuttle), to=prevr)
 
         self.incr(self.result_shuttle_requests, resultShuttle.cid)
+
+
+    def receive(msg=('client_retransmit_request', opArgs, cid, requestIndex), from_=p) :
+        if(cid == 0):
+            # head
+            pass
+        else:
+            # check if result_shuttle present
+            send(('client_request_forward', opArgs, cid, requestIndex), to=head)
+            # wait for the retransmission
+            if(await()):
+                pass
+            elif timeout(nonhead_timeout):
+                # replace
+                pass
+
+    def receive(msg=('client_request_forward', opArgs, cid, requestIndex), from_=p):
+        pass
+
+
 
 
     def receive(msg=('shutdown',), from_=p):

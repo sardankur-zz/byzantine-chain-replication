@@ -72,8 +72,16 @@ class Client(process):
                 else:
                     continue   
 
-            elif timeout(self.client_timeout): ###TODO: SEC TO MILISECOND timer
-                pass # do retransmission
+            elif timeout(self.client_timeout / 1000):
+                log.info("Request number : %d retransmitting" % requestIndex)
+                send(('client_retransmit_request', workArgs[requestIndex], cid, requestIndex), to=self.latest_config.replicas)
+                if(await(some(received(('client_retransmit_response', result, result_proof, rIndex)), has=rIndex == requestIndex))):
+                    pass
+                elif timeout(self.client_timeout / 1000):
+                    log.error("Request number : %d response timed out", requestIndex)
+                    log.error("Reconfigure")
+
+
         
         await(self.on == False)
         send(('shut',), to=self.main_client)

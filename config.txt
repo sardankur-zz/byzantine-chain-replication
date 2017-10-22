@@ -27,4 +27,4 @@ test_workload = {'movie1': 'star1 wars1', 'movie': 'star wars', 'jedi': 'luke'}
 # configurations are numbered starting with 0.  replicas are numbered by
 # position in the chain, starting from 0.  replicas without a specified
 # failure scenario are failure-free.
-failures[0,0] = client_request(0,1), change_operation()
+# failures[0,0] = client_request(0,1), change_operation()
