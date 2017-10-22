@@ -53,15 +53,9 @@ class Olympus(process):
             config.private_keys.append(signingKey)
             config.public_keys.append(signingKey.verify_key)
 
-        setup(replica_list[0], (0, None, replica_list[1], config.head, config.tail, config.private_keys[0],
-                                config.public_keys, failure_cases.get(str(0), [])))
-        
-        for i in range(1, 2*t):
-            setup(replica_list[i], (i, replica_list[i-1], replica_list[i+1], config.head,
-                                    config.tail, config.private_keys[i], config.public_keys, failure_cases.get(str(i), [])))
-
-        setup(replica_list[2*t], (2*t, replica_list[2*t - 1], None, config.head, config.tail, config.private_keys[2*t],
-                                  config.public_keys, failure_cases.get(str(2*t), [])))
+        #Setting up the replicas 
+        for i in range(2*t + 1):
+            setup(replica_list[i], (head_timeout, nonhead_timeout, i, replica_list, config.private_keys[i], config.public_keys, failure_cases.get(str(i), [])))
 
         start(config.replicas)
         self.configs.append(config)
