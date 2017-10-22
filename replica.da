@@ -77,16 +77,22 @@ class Replica(process):
     def isOrderProofValid(slot_number, opArgs, order_proof):
         i = 0
         for orderStatement in order_proof:
-            if (orderStatement.slot_number != slot_number or orderStatement.operation != opArgs):
+            if orderStatement is None:
+                logger.debug("Order Statement number = %d is missing" % i)
                 return False
-
+            if orderStatement.slot_number != slot_number:
+                logger.debug("Slot number for Order Statement number = %d is not correct" % i)
+                return False
+            if orderStatement.operation != opArgs:
+                logger.debug("opArgs for Order Statement number = %d is not valid" % i)
+                return False
             try:
                 self.public_keys[i].verify(orderStatement.signature)
             except Exception:
-                logger.debug("Order Statement number = %d is not valid" % i)
-                return False
-                
+                logger.debug("Order Statement number = %d is tempered" % i)
+                return False   
             i = i + 1
+            
         return True
 
 
@@ -130,7 +136,7 @@ class Replica(process):
         logger.info("Shuttle Received")
 
         if not isOrderProofValid(shuttle.slot_number, shuttle.opArgs, shuttle.order_proof):
-            logger.critical("Order Proof is not valid")
+            logger.error("Order Proof is not valid")
 
         # change opArgs if failure case demands
         failure = Failure.get_failure(failures, 'shuttle', self.get(self.shuttle_requests, shuttle.cid), shuttle.cid,

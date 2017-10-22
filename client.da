@@ -39,13 +39,16 @@ class Client(process):
         i = 0
 
         for resultStatement in result_proof:
-            if (resultStatement is None or opArgs != resultStatement.operation):
+            if resultStatement is None:
+                logger.debug("Result statement number = %d is missing" % i)
+                return False   
+            if opArgs != resultStatement.operation:
                 logger.debug("opArgs for Result statement number = %d is not valid" % i)
                 return False         
             if not sodium_memcmp(resultStatement.result_hash, result_hash):
                 logger.debug("Result Hash for Result statement number = %d is not valid" % i)
                 return False
-            
+
             try:
                 public_keys[i].verify(resultStatement.signature)
             except Exception:
@@ -67,7 +70,7 @@ class Client(process):
 
             if(await(some(received(('client_response', result, result_proof, rIndex)), has= rIndex==requestIndex))):
                 if not isvalidResultProof(workArgs[requestIndex], result, result_proof, config.public_keys):
-                    logger.error("Result Proof is not valid")
+                    logger.error("Result Proof is not valid for rIndex = %d" % rIndex)
                     continue #TODO:report to the olympus 
                 else:
                     continue   
