@@ -1,6 +1,11 @@
-import logging
-
 from enum import Enum
+from nacl.bindings.utils import sodium_memcmp
+import logging
+import nacl.signing
+import nacl.hash
+import nacl.encoding
+
+HASHER = nacl.hash.sha256
 get_logger = import_da("app_logging").get_logger
 common = import_da("common")
 OpArgs = common.OpArgs
@@ -28,6 +33,29 @@ class Client(process):
 
         logger.info("Initialized with Workload : %s" % (str(self.workArgs)))
 
+    
+    def isvalidResultProof(opArgs, result, result_proof, public_keys):
+        result_hash = HASHER(result.encode(encoding='UTF-8'), encoder=nacl.encoding.HexEncoder)
+        i = 0
+
+        for resultStatement in result_proof:
+            if (resultStatement is None or opArgs != resultStatement.operation):
+                logger.debug("opArgs for Result statement number = %d is not valid" % i)
+                return False         
+            if not sodium_memcmp(resultStatement.result_hash, result_hash):
+                logger.debug("Result Hash for Result statement number = %d is not valid" % i)
+                return False
+            
+            try:
+                public_keys[i].verify(resultStatement.signature)
+            except Exception:
+                logger.debug("Result Statement number = %d is tempered" % i)
+                return False
+            i = i + 1
+
+        return True 
+
+
     def run():
         logger.info("Running")
         for requestIndex in range(len(self.workArgs)):
@@ -38,10 +66,14 @@ class Client(process):
 
 
             if(await(some(received(('client_response', result, result_proof, rIndex)), has= rIndex==requestIndex))):
-                continue
+                if not isvalidResultProof(workArgs[requestIndex], result, result_proof, config.public_keys):
+                    logger.ERROR("Result Proof is not valid")
+                    continue #TODO:report to the olympus 
+                else:
+                    continue   
+
             elif timeout(self.client_timeout): ###TODO: SEC TO MILISECOND timer
-                # what to do?
-                pass
+                pass # do retransmission
         
         await(self.on == False)
         send(('shut',), to=self.main_client)
