@@ -1,3 +1,4 @@
+from nacl.bindings.utils import sodium_memcmp
 import logging
 import nacl.signing
 import nacl.hash
@@ -100,6 +101,30 @@ class Replica(process):
             
         return True
 
+    
+    def isvalidResultProof(opArgs, result, result_proof, public_keys):
+        result_hash = HASHER(result.encode(encoding='UTF-8'), encoder=nacl.encoding.HexEncoder)
+        i = 0
+
+        for resultStatement in result_proof:
+            if resultStatement is None:
+                logger.debug("Result statement number = %d is missing" % i)
+                return False   
+            if opArgs != resultStatement.operation:
+                logger.debug("opArgs for Result statement number = %d is not valid" % i)
+                return False         
+            if not sodium_memcmp(resultStatement.result_hash, result_hash):
+                logger.debug("Result Hash for Result statement number = %d is not valid" % i)
+                return False
+
+            try:
+                public_keys[i].verify(resultStatement.signature)
+            except Exception:
+                logger.debug("Result Statement number = %d is tempered" % i)
+                return False
+            i = i + 1
+
+        return True 
 
     def receive(msg=('client_request', opArgs, cid, requestIndex), from_=p):
         logger.info("Client request from cid = %d requestId = %d received with op args %s" % (cid, requestIndex, opArgs))
@@ -333,6 +358,11 @@ class Replica(process):
             send(('client_response', result, shuttle.result_proof, shuttle.requestIndex), to=shuttle.client)
             
             resultShuttle = ResultShuttle(shuttle, result)
+
+            if not isvalidResultProof(shuttle.opArgs, resultShuttle.result, resultShuttle.result_proof, self.public_keys):
+                logger.error("Reconfigure: Result Proof is not valid for cid = %d requestIndex = %d" % (resultShuttle.cid, resultShuttle.requestIndex))
+                return
+
             #store in the cache
             resultShuttleCache[(resultShuttle.cid, resultShuttle.requestIndex)] = resultShuttle
 
@@ -347,10 +377,15 @@ class Replica(process):
 
     def receive(msg=('result_shuttle', resultShuttle), from_=p):
         logger.info("Result Shuttle Received\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(resultShuttle.cid, resultShuttle.requestIndex,resultShuttle.slot_number))
+        
+
+        if not isvalidResultProof(resultShuttle.opArgs, resultShuttle.result, resultShuttle.result_proof, self.public_keys):
+            logger.error("Reconfigure: Result Proof is not valid for cid = %d requestIndex = %d" % (resultShuttle.cid, resultShuttle.requestIndex))
+            return
 
         #cache the result shuttle
         resultShuttleCache[(resultShuttle.cid, resultShuttle.requestIndex)] = resultShuttle
-
+        
         if (prevr):
             logger.info("Result Shuttle Forwarded\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(resultShuttle.cid, resultShuttle.requestIndex,resultShuttle.slot_number))
 
