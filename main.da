@@ -108,9 +108,9 @@ def main():
             for i, item in enumerate(replica_states):
                 test_json = json.loads(test_config['test_workload'].replace("'", "\""))
                 if test_json != item['dictionary']:
-                    logger.error("Replica rid=%d in inconsistent state = %s" % (item['rid'], item['dictionary']))
+                    logger.error("Replica rid=%d does not match test scenario = %s" % (item['rid'], item['dictionary']))
                 else:
-                    logger.info("Replica rid=%d in consistent state = %s" % (item['rid'], item['dictionary']))
+                    logger.info("Replica rid=%d in matches test scenario = %s" % (item['rid'], item['dictionary']))
 
         # check validity for each test case
     elif timeout(test_config['client_timeout']):

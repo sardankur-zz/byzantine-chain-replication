@@ -2,6 +2,7 @@ import logging
 import nacl.signing
 import nacl.hash
 import nacl.encoding
+import time
 
 HASHER = nacl.hash.sha256
 get_logger = import_da("app_logging").get_logger
@@ -191,9 +192,39 @@ class Replica(process):
             
             logger.info("Processing Forwarded request for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
 
+            # change result cache for un-recognized op
+            failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_forward_requests, cid),
+                                          cid, 'remove_from_cache')
+            if (len(failure) > 0):
+                if (cid, requestIndex) in resultShuttleCache.keys():
+                    resultShuttleCache.pop((cid, requestIndex))
+                if (cid, requestIndex) in requestCache.keys():
+                    requestCache.pop((cid, requestIndex))
+
             # send from result cache if available 
             resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
             if resultShuttle is not None:
+
+                # change result if applicable
+                failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_forward_requests, cid), cid,
+                                              'change_result')
+                if (len(failure) > 0):
+                    resultShuttle.result = Failure.change_result()
+
+                    # change result if applicable
+                    failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_forward_requests, cid),
+                                                  cid,
+                                                  'change_result')
+                    if (len(failure) > 0):
+                        resultShuttle.result = Failure.change_result()
+
+
+                    # change opArgs if failure case demands
+                    failure = Failure.get_failure(failures, 'forwarded_request',
+                                                  self.get(self.client_requests, cid), cid, 'drop_result_stmt')
+                    if (len(failure) > 0):
+                        resultShuttle.result_proof[0] = None
+
                 logger.info("Replying to retransmit request from cid = %d and requestIndex = %d from resultCache" % (cid, requestIndex))
                 send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)
                 retransmitCache[(cid, requestIndex)] = 'Responded'
@@ -202,11 +233,26 @@ class Replica(process):
 
             # wait for result shuttle to come back and then response
             elif (cid, requestIndex) in requestCache.keys():
+
                 logger.info("Waiting for result shuttle to Reply to retransmit request from cid = %d and requestIndex = %d" % (cid, requestIndex))
                 
                 if await(some(received(('result_shuttle', resultShuttle)), has = resultShuttle.cid == cid and resultShuttle.requestIndex == requestIndex)):
+
                     time.sleep(0.1)
+
                     resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
+
+                    # change result if applicable
+                    failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_forward_requests, cid),
+                                                  cid, 'change_result')
+                    if (len(failure) > 0):
+                        resultShuttle.result = Failure.change_result()
+
+                    # change opArgs if failure case demands
+                    failure = Failure.get_failure(failures, 'forwarded_request',
+                                                  self.get(self.client_forward_requests, cid), cid, 'drop_result_stmt')
+                    if (len(failure) > 0):
+                        resultShuttle.result_proof[0] = None
 
                     logger.info("Head responding, waiting for result shuttle for the operation in queue for cid = %d and requestIndex = %d" % (cid, requestIndex))
                     send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)
@@ -225,7 +271,7 @@ class Replica(process):
                 self.slot_number = self.slot_number + 1;
 
                 # change opArgs if failure case demands
-                failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_requests, cid), cid, 'change_operation')
+                failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_forward_requests, cid), cid, 'change_operation')
                 if(len(failure) > 0):
                     opArgs = Failure.change_operation()
 
@@ -237,7 +283,7 @@ class Replica(process):
                 result = Operation.do_op(dictionary, opArgs)
 
                 # change result if applicable
-                failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_requests, cid), cid, 'change_result')
+                failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_forward_requests, cid), cid, 'change_result')
                 if (len(failure) > 0):
                     result = Failure.change_result()
 
@@ -248,7 +294,7 @@ class Replica(process):
                 shuttle.result_proof.append(resultStatement)
 
                 # change opArgs if failure case demands
-                failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_requests, cid), cid, 'drop_result_stmt')
+                failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_forward_requests, cid), cid, 'drop_result_stmt')
                 if (len(failure) > 0):
                     shuttle.result_proof[0] = None
 
@@ -257,7 +303,7 @@ class Replica(process):
 
                 self.incr(self.client_requests, cid)
                  
-                logger.info("Waiting on result_shuttle on newly created request for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid)) 
+                logger.info("Waiting on result_shuttle on newly created request for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
                 if await(some(received(('result_shuttle', resultShuttle)),has = resultShuttle.cid == cid and resultShuttle.requestIndex == requestIndex)):
                     time.sleep(0.1)
                     resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
@@ -266,7 +312,6 @@ class Replica(process):
                     send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)
                     retransmitCache[(cid, requestIndex)] = 'Responded'
                     send(('head_responded_to_retransmit',cid, requestIndex), to=p)
-                    pass
 
                 elif timeout(head_timeout):
                     logger.error("Reconfigure: head timeout waiting for result_shuttle on newly created request cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
@@ -336,9 +381,26 @@ class Replica(process):
             #store in the cache
             resultShuttleCache[(resultShuttle.cid, resultShuttle.requestIndex)] = resultShuttle
 
+
+            failure = Failure.get_failure(failures, 'result_shuttle',
+                                          self.get(self.result_shuttle_requests, resultShuttle.cid), resultShuttle.cid,
+                                          'change_result')
+            if (len(failure) > 0):
+                resultShuttle.result = Failure.change_result()
+
+
+            failure = Failure.get_failure(failures, 'result_shuttle',
+                                          self.get(self.result_shuttle_requests, resultShuttle.cid), resultShuttle.cid,
+                                          'drop_result_stmt')
+            if (len(failure) > 0):
+                resultShuttle.result_proof[0] = None
+
+
             logger.info("Result Shuttle Started\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(resultShuttle.cid, resultShuttle.requestIndex,resultShuttle.slot_number))
 
             send(('result_shuttle', resultShuttle), to=prevr)
+
+            self.incr(self.result_shuttle_requests, resultShuttle.cid)
         
         self.incr(self.shuttle_requests, shuttle.cid)
 
@@ -351,19 +413,25 @@ class Replica(process):
         #cache the result shuttle
         resultShuttleCache[(resultShuttle.cid, resultShuttle.requestIndex)] = resultShuttle
 
+        failure = Failure.get_failure(failures, 'result_shuttle', self.get(self.result_shuttle_requests,
+                                                   resultShuttle.cid), resultShuttle.cid, 'change_result')
+        if (len(failure) > 0):
+            resultShuttle.result = Failure.change_result()
+
+
+
+        failure = Failure.get_failure(failures, 'result_shuttle',
+                                      self.get(self.result_shuttle_requests, resultShuttle.cid), resultShuttle.cid, 'drop_result_stmt')
+        if (len(failure) > 0):
+            resultShuttle.result_proof[0] = None
+
+
         if (prevr):
             logger.info("Result Shuttle Forwarded\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(resultShuttle.cid, resultShuttle.requestIndex,resultShuttle.slot_number))
-
-            # change opArgs if failure case demands
-            failure = Failure.get_failure(failures, 'result_shuttle', self.get(self.result_shuttle_requests, resultShuttle.cid),
-                                          resultShuttle.cid, 'drop_result_stmt')
-            if (len(failure) > 0):
-                resultShuttle.result_proof[0] = None
 
             send(('result_shuttle', resultShuttle), to=prevr)
 
         self.incr(self.result_shuttle_requests, resultShuttle.cid)
-
 
 
 
