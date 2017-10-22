@@ -38,21 +38,28 @@ class ResultStatement():
         return "%s - %s - %s" % (self.operation, self.result_hash, self.signature)
 
 class Shuttle():
-    def __init__(self, slot_number, opArgs, client, cid):
+    def __init__(self, slot_number, opArgs, client, cid, requestIndex):
         self.slot_number = slot_number
         self.opArgs = opArgs
         self.client = client
         self.cid = cid
+        self.requestIndex = requestIndex
         self.order_proof = []
         self.result_proof = []
 
     def __str__(self):
-        return str("Slot_number: %d\nOpt Args : %s\norder_proof: %s\nresult_proof: %s" % (self.slot_number, self.opArgs, self.order_proof, self.result_proof))
+        return str("Cid: %d requestIndex: %d Slot_number: %d\nOpt Args : %s\norder_proof: %s\nresult_proof: %s" % (self.cid, self.requestIndex, self.slot_number, self.opArgs, self.order_proof, self.result_proof))
 
-class ResultShuttle():
-    def __init__(self, result_proof, cid):
-        self.result_proof = result_proof
-        self.cid = cid
+class ReverseShuttle():
+    def __init__(self, shuttle:Shuttle):
+        self.slot_number = shuttle.slot_number
+        self.client = shuttle.client
+        self.cid = shuttle.cid
+        self.requestIndex = shuttle.requestIndex
+        self.result_proof = shuttle.result_proof
+    
+    def __str__(self):
+        return str("Cid: %d requestIndex: %d Slot_number: %d\nresult_proof: %s" % (self.cid, self.requestIndex, self.slot_number, self.result_proof))
 
 
 class Operation():

@@ -1,6 +1,7 @@
 import logging
 import nacl.signing
 import nacl.hash
+import nacl.encoding
 
 HASHER = nacl.hash.sha256
 get_logger = import_da("app_logging").get_logger
@@ -10,10 +11,10 @@ OpArgs = common.OpArgs
 OrderStatement = common.OrderStatement
 ResultStatement = common.ResultStatement
 Shuttle = common.Shuttle
+ReverseShuttle = common.ReverseShuttle
 Operation = common.Operation
 Config = common.Config
 ReplicaState = common.ReplicaState
-ResultShuttle = common.ResultShuttle
 
 logger = get_logger("REPLICA")
 
@@ -47,6 +48,8 @@ class Replica(process):
         logger.info("Terminated")
 
 
+
+
     def creatSignedOrderStatement(slot_number, opArgs):
         orderStatement = str(slot_number) + str(opArgs)
         orderStatement = orderStatement.encode(encoding='UTF-8')
@@ -60,11 +63,11 @@ class Replica(process):
         signature = private_key.sign(resultStatement)
         return ResultStatement(opArgs, result_hash, signature)
 
-    def incr(self, tracker, cid):
-        if self.tracker.get(str(cid), None) is None:
-            self.tracker[str(cid)] = 0
+    def incr(tracker, cid):
+        if tracker.get(str(cid), None) is None:
+           tracker[str(cid)] = 0
         else:
-            self.tracker[str(cid)] = self.tracker[str(cid)] + 1
+            tracker[str(cid)] = tracker[str(cid)] + 1
 
 
     def isOrderProofValid(slot_number, opArgs, order_proof):
@@ -74,20 +77,19 @@ class Replica(process):
                 return False
             else:
                 try:
-                    public_keys[i].verify(orderStatement.signature)
-                except ValueError:
+                    self.public_keys[i].verify(orderStatement.signature)
+                except Exception:
                     logger.debug("Order Statement number = %d is not valid" % i)
                     return False
             i = i + 1
         return True
 
 
-    def receive(msg=('client_request', opArgs, cid), from_=p):
-
-        logger.info("Client request from cid = %s received with op args %s" % (str(cid), opArgs))
+    def receive(msg=('client_request', opArgs, cid, requestIndex), from_=p):
+        logger.info("Client request from cid = %s requestId = %d received with op args %s" % (str(cid), requestIndex, opArgs))
 
         self.slot_number = self.slot_number + 1;
-        shuttle = Shuttle(self.slot_number, opArgs, p, cid)
+        shuttle = Shuttle(self.slot_number, opArgs, p, cid, requestIndex)
 
         result = Operation.do_op(dictionary, opArgs)
 
@@ -104,7 +106,6 @@ class Replica(process):
 
 
     def receive(msg=('shuttle', shuttle), from_=p):
-
         logger.info("Shuttle Received")
 
         if not isOrderProofValid(shuttle.slot_number, shuttle.opArgs, shuttle.order_proof):
@@ -125,22 +126,20 @@ class Replica(process):
             send(('shuttle', shuttle), to=nextr)
         else:
             logger.info("Client Response sent to cid = %s" % (str(shuttle.client)))
-            send(('client_response', result, shuttle.result_proof), to=shuttle.client)
+            send(('client_response', result, shuttle.result_proof, shuttle.requestIndex), to=shuttle.client)
             logger.info("Reverse Shuttle Started")
-            send(('reverse_shuttle', ResultShuttle(shuttle.result_proof, shuttle.cid)), to=prevr)
+            reverseShuttle = ReverseShuttle(shuttle)
+            send(('reverse_shuttle', reverseShuttle), to=prevr)
 
-        self.incr(self.shuttle_requests, shuttle.cid)
+        self.incr(self.shuttle_requests, reverseShuttle.cid)
 
-
-    def receive(msg=('reverse_shuttle', result_shuttle), from_=p):
+    def receive(msg=('reverse_shuttle', reverseShuttle), from_=p):
         logger.info("Reverse Shuttle Received")
         # cache the result proof
         if (prevr):
             logger.info("Reverse Shuttle Forwarded")
-            send(('reverse_shuttle', result_shuttle), to=prevr)
-
-        self.incr(self.result_shuttle_requests, result_shuttle.cid)
-
+            send(('reverse_shuttle', reverseShuttle), to=prevr)
+        self.incr(self.result_shuttle_requests, reverseShuttle.cid)
 
     def receive(msg=('shutdown',), from_=p):
         logger.info("Request for shutdown")
