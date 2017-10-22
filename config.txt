@@ -18,13 +18,15 @@ nonhead_timeout = 3000
 
 # CLIENT WORKLOAD
 workload[0] = put('movie','star'); append('movie',' wars'); get('movie')
+# workload[0] = pseudorandom(1, 1000)
 
 # TEST
-test_workload = {'movie1': 'star1 wars1', 'movie': 'star wars', 'jedi': 'luke'}
+test_workload = {'movie': 'star wars'}
+#test_workload = {'movie1': 'star1 wars1', 'movie': 'star wars', 'jedi': 'luke'}
 
 # FAILURE SCENARIO
 # failures(c,r) is the failure scenario for replica r in configuration c.
 # configurations are numbered starting with 0.  replicas are numbered by
 # position in the chain, starting from 0.  replicas without a specified
 # failure scenario are failure-free.
-# failures[0,0] = client_request(0,1), change_operation()
+# failures[0,1] = shuttle(0,1), change_operation()

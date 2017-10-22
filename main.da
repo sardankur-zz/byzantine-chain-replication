@@ -25,12 +25,15 @@ def read_configuration(filename):
     return test_config
 
 def main():
-
+   
     if(len(sys.argv) != 2):
         logger.error("Number or arguments is incorrect")
         exit(1)
-
+     
+    config(clock='Lamport') 
+     
     test_config = read_configuration(sys.argv[1])
+    
 
     # read failure cases
     failures = {}
@@ -80,10 +83,12 @@ def main():
         while index < len(opSequence):
             nextIndex = min(index + 100, len(opSequence))
             clk = logical_clock()
-            send(('client_workload', opSequence[index:nextIndex]))
-            await(some()
+            send(('client_workload', opSequence[index:nextIndex]), to=clients[i])
+            await(some(received(('client_workload_ack', cid), clk=rclk), has= (rclk > clk and i == cid)))
+            # await(some(received(('client_workload_ack', cid), clk = rclk), has = (i == cid and rclk > clk)))
             index = nextIndex
 
+    send(('client_run',), to=set(clients))
     time.sleep(0.2)
 
     # waiting for clients to finish their workload
