@@ -24,7 +24,7 @@ class Replica(process):
 
     def setup(head_timeout: int, nonhead_timeout: int, rid: int, replicas, private_key, public_keys, failures):
         self.on = True
-        self.slot_number = 0
+        self.slot_number = -1 # so that number starts from zero
         self.dictionary = {}
         self.resultShuttleCache = {}
         self.retransmitCache = {}
@@ -134,7 +134,7 @@ class Replica(process):
         if (len(failure) > 0):
             shuttle.result_proof[0] = None
 
-        logger.info("Shuttle Started")
+        logger.info("Shuttle Started\t\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(shuttle.cid, shuttle.requestIndex, shuttle.slot_number))
         send(('shuttle', shuttle), to=nextr)
 
         self.incr(self.client_requests, cid)
@@ -142,10 +142,12 @@ class Replica(process):
 
     def receive(msg=('client_retransmit_request', opArgs, cid, requestIndex), from_=p) :
         
-        # send from resukt cache if available 
+        # send from result cache if available 
         resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
         if resultShuttle is not None:
             logger.info("Replying to retransmit request from cid = %d and requestIndex = %d" % (cid, requestIndex))
+            if rid == 0:
+                retransmitCache[(cid,requestIndex)] = 'Responded'
             send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=p)
             return 
         
@@ -170,35 +172,39 @@ class Replica(process):
     
     # Only For Head 
     def receive(msg=('client_request_forward', opArgs, cid, requestIndex), from_=p):
-        # send from resukt cache if available 
-        resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
         
-        if resultShuttle is not None:
-            logger.info("Replying to retransmit request from cid = %d and requestIndex = %d" % (cid, requestIndex))
-            send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)
-            if( p != head):
+        #if this is first forwarded request received at the head
+        if retransmitCache.get((cid, requestIndex), None) is None:
+            retransmitCache[(cid, requestIndex)] = 'inProcess'
+            # send from result cache if available 
+            resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
+            if resultShuttle is not None:
+                logger.info("Replying to retransmit request from cid = %d and requestIndex = %d" % (cid, requestIndex))
+                send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)
+                retransmitCache[(cid, requestIndex)] = 'Responded'
                 send(('head_responded_to_retransmit',cid, requestIndex), to=p)
-            return
+                return
 
-        #if      
-        retransmit = retransmitCache.get((cid, requestIndex), None)
-        if retransmit is not None:
-            if (cid, requestIndex) in requestCache.keys():
+            # wait for result shuttle to come back and then response
+            elif (cid, requestIndex) in requestCache.keys():
                 if await(some(received(('result_shuttle', resultShuttle)), has = resultShuttle.cid == cid and resultShuttle.requestIndex == requestIndex)):
+                    time.sleep(0.1)
                     resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
                     send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)
+                    retransmitCache[(cid, requestIndex)] = 'Responded'
                     send(('head_responded_to_retransmit',cid, requestIndex), to=p)
                 elif timeout(head_timeout/1000):
                     logger.error("Reconfigure at client_request_forward")
+            
+            # unrecognized operation
             else:
-                # unrecognized operation
-
+               
                 self.slot_number = self.slot_number + 1;
 
-                # # change opArgs if failure case demands
-                # failure = Failure.get_failure(failures, 'client_request', self.get(self.client_requests, cid), cid, 'change_operation')
-                # if(len(failure) > 0):
-                #     opArgs = Failure.change_operation()
+                # change opArgs if failure case demands
+                failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_requests, cid), cid, 'change_operation')
+                if(len(failure) > 0):
+                    opArgs = Failure.change_operation()
                 
                 # store received operations in the cache
                 requestCache[(cid, requestIndex)] = opArgs
@@ -207,10 +213,10 @@ class Replica(process):
 
                 result = Operation.do_op(dictionary, opArgs)
 
-                # # change result if applicable
-                # failure = Failure.get_failure(failures, 'client_request', self.get(self.client_requests, cid), cid, 'change_result')
-                # if (len(failure) > 0):
-                #     result = Failure.change_result()
+                # change result if applicable
+                failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_requests, cid), cid, 'change_result')
+                if (len(failure) > 0):
+                    result = Failure.change_result()
 
                 orderStatement = creatSignedOrderStatement(self.slot_number, opArgs)
                 shuttle.order_proof.append(orderStatement)
@@ -218,29 +224,40 @@ class Replica(process):
                 resultStatement = creatSignedResultStatement(opArgs, result)
                 shuttle.result_proof.append(resultStatement)
 
-                # # change opArgs if failure case demands
-                # failure = Failure.get_failure(failures, 'client_request', self.get(self.client_requests, cid), cid, 'drop_result_stmt')
-                # if (len(failure) > 0):
-                #     shuttle.result_proof[0] = None
+                # change opArgs if failure case demands
+                failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_requests, cid), cid, 'drop_result_stmt')
+                if (len(failure) > 0):
+                    shuttle.result_proof[0] = None
 
-                logger.info("Shuttle Started")
+                logger.info("Shuttle Started\t\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(shuttle.cid, shuttle.requestIndex,shuttle.slot_number))
                 send(('shuttle', shuttle), to=nextr)
 
                 self.incr(self.client_requests, cid)
 
                 if await(some(received(('result_shuttle', resultShuttle)),has = resultShuttle.cid == cid and resultShuttle.requestIndex == requestIndex)):
-                    #TODO WORK HERE
+                    time.sleep(0.1)
+                    resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
+                    send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)
+                    retransmitCache[(cid, requestIndex)] = 'Responded'
+                    send(('head_responded_to_retransmit',cid, requestIndex), to=p)
                     pass
                 elif timeout(head_timeout/1000):
                     logger.error("Reconfigure at client_request_forward")
+        else:
+            # just wait for the status of the cache to change
+            if await(requestCache.get((cid, requestIndex), None) == 'Responded'):
+                send(('head_responded_to_retransmit',cid, requestIndex), to=p)
+            elif timeout(head_timeout/1000):          
+                logger.error("Reconfigure at client_request_forward from p =%s", str(p))
 
-        
 
     def receive(msg=('shuttle', shuttle), from_=p):
-        logger.info("Shuttle Received")
+        logger.info("Shuttle Received\t\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(shuttle.cid, shuttle.requestIndex,shuttle.slot_number))
 
         if not isOrderProofValid(shuttle.slot_number, shuttle.opArgs, shuttle.order_proof):
             logger.error("Order Proof is not valid")
+            # send wedged statement to olympus
+            return
          
         # change opArgs if failure case demands
         failure = Failure.get_failure(failures, 'shuttle', self.get(self.shuttle_requests, shuttle.cid), shuttle.cid,
@@ -273,7 +290,7 @@ class Replica(process):
             shuttle.result_proof[0] = None
 
         if (nextr):
-            logger.info("Shuttle Forwarded")
+            logger.info("Shuttle Forwarded\t\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(shuttle.cid, shuttle.requestIndex,shuttle.slot_number))
             send(('shuttle', shuttle), to=nextr)
         else:
             logger.info("Client Response sent to cid = %d" % shuttle.cid)
@@ -282,20 +299,20 @@ class Replica(process):
             resultShuttle = ResultShuttle(shuttle, result)
             #store in the cache
             resultShuttleCache[(resultShuttle.cid, resultShuttle.requestIndex)] = resultShuttle
-            logger.info("Result Shuttle Started")
+            logger.info("Result Shuttle Started\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(resultShuttle.cid, resultShuttle.requestIndex,resultShuttle.slot_number))
             send(('result_shuttle', resultShuttle), to=prevr)
         
         self.incr(self.shuttle_requests, shuttle.cid)
 
 
     def receive(msg=('result_shuttle', resultShuttle), from_=p):
-        logger.info("Result Shuttle Received")
+        logger.info("Result Shuttle Received\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(resultShuttle.cid, resultShuttle.requestIndex,resultShuttle.slot_number))
 
         #cache the result shuttle
         resultShuttleCache[(resultShuttle.cid, resultShuttle.requestIndex)] = resultShuttle
 
         if (prevr):
-            logger.info("Result Shuttle Forwarded")
+            logger.info("Result Shuttle Forwarded\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(resultShuttle.cid, resultShuttle.requestIndex,resultShuttle.slot_number))
 
             # change opArgs if failure case demands
             failure = Failure.get_failure(failures, 'result_shuttle', self.get(self.result_shuttle_requests, resultShuttle.cid),

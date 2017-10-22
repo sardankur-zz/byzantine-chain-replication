@@ -25,12 +25,15 @@ def read_configuration(filename):
     return test_config
 
 def main():
-
+   
     if(len(sys.argv) != 2):
         logger.error("Number or arguments is incorrect")
         exit(1)
-
+     
+    config(clock='Lamport') 
+     
     test_config = read_configuration(sys.argv[1])
+    
 
     # read failure cases
     failures = {}
@@ -73,11 +76,12 @@ def main():
             opSequence = Operation.generate_requests(int(opSequence[0][1]), int(opSequence[0][2]))
 
         setup(client, (i, test_config['client_timeout'], opSequence, olympus))
+    
+    time.sleep(0.2)
         
     start(clients)
 
     time.sleep(0.2)
-
 
     # shutdown system
     send(("shutdown",), to=clients)
