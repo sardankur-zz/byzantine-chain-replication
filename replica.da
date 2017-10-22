@@ -170,7 +170,7 @@ class Replica(process):
                     send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=p)
                 else:
                     logger.error('Reconfigure at client_retransmit_request empty cache cid = %d and requestIndex = %d' % (cid, requestIndex))
-            elif timeout(nonhead_timeout/1000):
+            elif timeout(nonhead_timeout):
                 logger.error('Reconfigure at client_retransmit_request timeout cid = %d and requestIndex = %d' % (cid, requestIndex))
                 pass
    
@@ -204,7 +204,7 @@ class Replica(process):
                     send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)
                     retransmitCache[(cid, requestIndex)] = 'Responded'
                     send(('head_responded_to_retransmit',cid, requestIndex), to=p)
-                elif timeout(head_timeout/1000):
+                elif timeout(head_timeout):
                     logger.error("Reconfigure at client_request_forward")
             
             # unrecognized operation
@@ -254,13 +254,13 @@ class Replica(process):
                     retransmitCache[(cid, requestIndex)] = 'Responded'
                     send(('head_responded_to_retransmit',cid, requestIndex), to=p)
                     pass
-                elif timeout(head_timeout/1000):
+                elif timeout(head_timeout):
                     logger.error("Reconfigure at client_request_forward")
         else:
             # just wait for the status of the cache to change
             if await(retransmitCache.get((cid, requestIndex), None) == 'Responded'):
                 send(('head_responded_to_retransmit',cid, requestIndex), to=p)
-            elif timeout(head_timeout/1000):          
+            elif timeout(head_timeout):
                 logger.error("Reconfigure at client_request_forward from p =%s", str(p))
 
 

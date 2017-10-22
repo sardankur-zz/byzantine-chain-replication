@@ -33,7 +33,11 @@ def main():
     config(clock='Lamport') 
      
     test_config = read_configuration(sys.argv[1])
-    
+
+    # change timeouts to seconds
+    test_config['head_timeout'] = test_config.get('head_timeout', 2000) / 1000
+    test_config['nonhead_timeout'] = test_config.get('nonhead_timeout', 2000) / 1000
+    test_config['client_timeout'] = test_config.get('client_timeout', 2000) / 1000
 
     # read failure cases
     failures = {}
@@ -102,7 +106,8 @@ def main():
         replica_states = json.loads(next(iter(replica_states)))
         if 'test_workload' in test_config.keys():
             for i, item in enumerate(replica_states):
-                if test_config['test_workload'] != str(item['dictionary']):
+                test_json = json.loads(test_config['test_workload'].replace("'", "\""))
+                if test_json != item['dictionary']:
                     logger.error("Replica rid=%d in inconsistent state = %s" % (item['rid'], item['dictionary']))
                 else:
                     logger.info("Replica rid=%d in consistent state = %s" % (item['rid'], item['dictionary']))
