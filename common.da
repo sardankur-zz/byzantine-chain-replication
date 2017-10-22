@@ -62,6 +62,7 @@ class ResultShuttle():
         self.client = shuttle.client
         self.cid = shuttle.cid
         self.requestIndex = shuttle.requestIndex
+        self.opArgs = shuttle.opArgs
         self.result_proof = shuttle.result_proof
         self.result = result
     

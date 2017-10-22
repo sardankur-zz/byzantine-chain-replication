@@ -87,7 +87,8 @@ class Client(process):
 
             if(await(some(received(('client_response', result, result_proof, rIndex)), has= rIndex==requestIndex))):
                 if not isvalidResultProof(workArgs[requestIndex], result, result_proof, config.public_keys):
-                    logger.error("Reconfigure: Result Proof is not valid for rIndex = %d" % rIndex)                    
+                    logger.error("Reconfigure: Result Proof is not valid for rIndex = %d" % rIndex)
+                    break                    
                 else:
                     logger.info("Response received for opArgs = %s and requestIndex %d" % (workArgs[requestIndex], requestIndex))   
 
@@ -99,7 +100,7 @@ class Client(process):
 
                 elif timeout(self.client_timeout):
                     logger.error("Reconfigure: Client_Retransmit_request timed out: Request number : %d " % requestIndex)
-                
+                    break
 
         self.on = False
 
