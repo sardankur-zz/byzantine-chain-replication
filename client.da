@@ -13,7 +13,8 @@ class Client(process):
         self.latest_config = None
         self.on = True
         self.workArgs = []
-        self.workIndex = 0
+        self.requestIndex = 0
+        self.main_client = None
 
         formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(name)s " + str(self.cid) + " : %(message)s")
         for handler in logger.handlers:
@@ -29,22 +30,25 @@ class Client(process):
 
     def run():
         logger.info("Running")
-        for workIndex in range(len(self.workArgs)):
+        for requestIndex in range(len(self.workArgs)):
             send(('latest_configuration',), to=olympus)
             await(some(received(('latest_configuration', config)), has=config is not None))
             self.latest_config = config
-            send(('client_request', workArgs[workIndex], cid), to=self.latest_config.head)
-            if(await(some(received(('client_response', result, result_proof)), has=result is not None))):
+            send(('client_request', workArgs[requestIndex], cid, requestIndex), to=self.latest_config.head)
+
+
+            if(await(some(received(('client_response', result, result_proof, rIndex)), has= rIndex==requestIndex))):
                 continue
             elif timeout(self.client_timeout): ###TODO: SEC TO MILISECOND timer
                 # what to do?
                 pass
-
+        
         await(self.on == False)
+        send(('shut',), to=self.main_client)
         logger.info("Terminated")
 
 
     def receive(msg=("shutdown",), from_=p):
-        logger.info("Request for shutdown")
-        send(('shut',), to=p)
+        logger.info("Request for shutdown") 
+        self.main_client = p       
         self.on = False
