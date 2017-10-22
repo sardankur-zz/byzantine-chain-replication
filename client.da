@@ -14,7 +14,7 @@ logger = get_logger("CLIENT")
 
 class Client(process):
 
-    def setup(cid: int, client_timeout: int, workload:list, olympus):
+    def setup(cid: int, client_timeout: int, olympus):
         self.latest_config = None
         self.on = True
         self.workArgs = []
@@ -24,12 +24,6 @@ class Client(process):
         formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(name)s " + str(self.cid) + " : %(message)s")
         for handler in logger.handlers:
             handler.setFormatter(formatter)
-
-        for work in workload:
-            if(len(work) < 3):
-                self.workArgs.append(OpArgs(work[0], work[1]))
-            else:
-                self.workArgs.append(OpArgs(work[0], work[1], work[2]))  
 
         logger.info("Initialized with Workload : %s" % (str(self.workArgs)))
 
@@ -61,37 +55,47 @@ class Client(process):
 
     def run():
         logger.info("Running")
+        await(self.on == False)
+        send(('shut',), to=self.main_client)
+        logger.info("Terminated")
+
+
+    def receive(msg=('client_workload', workload), from_=p):
+        for work in workload:
+            if(len(work) < 3):
+                self.workArgs.append(OpArgs(work[0], work[1]))
+            else:
+                self.workArgs.append(OpArgs(work[0], work[1], work[2]))
+        send(('client_workload_ack',), to=p)
+
+
+    def receive(msg=('client_run'), from_=p):
         for requestIndex in range(len(self.workArgs)):
             send(('latest_configuration',), to=olympus)
             await(some(received(('latest_configuration', config)), has=config is not None))
             self.latest_config = config
             send(('client_request', workArgs[requestIndex], cid, requestIndex), to=self.latest_config.head)
 
-
-            if(await(some(received(('client_response', result, result_proof, rIndex)), has= rIndex==requestIndex))):
+            if (await(some(received(('client_response', result, result_proof, rIndex)), has=rIndex == requestIndex))):
                 if not isvalidResultProof(workArgs[requestIndex], result, result_proof, config.public_keys):
                     logger.error("Result Proof is not valid for rIndex = %d" % rIndex)
-                    continue #TODO:report to the olympus 
+                    continue  # TODO:report to the olympus
                 else:
-                    continue   
+                    continue
 
             elif timeout(self.client_timeout / 1000):
                 log.info("Request number : %d retransmitting" % requestIndex)
-                send(('client_retransmit_request', workArgs[requestIndex], cid, requestIndex), to=self.latest_config.replicas)
-                if(await(some(received(('client_retransmit_response', result, result_proof, rIndex)), has=rIndex == requestIndex))):
+                send(('client_retransmit_request', workArgs[requestIndex], cid, requestIndex),
+                     to=self.latest_config.replicas)
+                if (await(some(received(('client_retransmit_response', result, result_proof, rIndex)),
+                               has=rIndex == requestIndex))):
                     pass
                 elif timeout(self.client_timeout / 1000):
                     log.error("Request number : %d response timed out", requestIndex)
                     log.error("Reconfigure")
 
-
-        
-        await(self.on == False)
-        send(('shut',), to=self.main_client)
-        logger.info("Terminated")
-
-
-    def receive(msg=("shutdown",), from_=p):
-        logger.info("Request for shutdown") 
-        self.main_client = p
         self.on = False
+
+
+
+

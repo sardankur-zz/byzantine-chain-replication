@@ -59,8 +59,12 @@ def main():
     # Wait for reconfiguration
 
     # start clients
-    clients = new(Client, num = test_config['num_client'])
-    for i, client in enumerate(clients):
+    clients = list(new(Client, num = test_config['num_client']))
+    for i in range(len(clients)):
+        setup(clients[i], (i, test_config['client_timeout'], olympus))
+    start(set(clients))
+
+    for i in range(len(clients)):
         workload_string = test_config['workload['+str(i)+']'];
         workload_lines = workload_string.split(';')
         opSequence = []
@@ -72,16 +76,17 @@ def main():
         if opSequence[0][0] == 'pseudorandom':
             opSequence = Operation.generate_requests(int(opSequence[0][1]), int(opSequence[0][2]))
 
-        setup(client, (i, test_config['client_timeout'], opSequence, olympus))
-        
-    start(clients)
+        index = 0
+        while index < len(opSequence):
+            nextIndex = min(index + 100, len(opSequence))
+            clk = logical_clock()
+            send(('client_workload', opSequence[index:nextIndex]))
+            await(some()
+            index = nextIndex
 
     time.sleep(0.2)
 
-
-    # shutdown system
-    send(("shutdown",), to=clients)
-
+    # waiting for clients to finish their workload
     await(each(c in clients, has=received(('shut',), from_=c)))
     logger.info("Clients are shut")
 
