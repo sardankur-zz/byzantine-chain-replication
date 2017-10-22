@@ -145,6 +145,8 @@ class Replica(process):
 
     def receive(msg=('client_retransmit_request', opArgs, cid, requestIndex), from_=p) :
         
+        logger.info("Received Retransmit request for opArgs = %s cid = %d requestIndex = %d" % (opArgs, cid, requestIndex))
+        
         # send from result cache if available 
         resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
         if resultShuttle is not None:
@@ -155,8 +157,9 @@ class Replica(process):
             return 
         
         # otherwise forward request to head (even if we are head)
-        send(('client_request_forward', opArgs, cid, requestIndex), to=head)
-        
+        send(('client_request_forward', opArgs, cid, requestIndex, rid), to=head)
+        logger.info('Forwarding request to head for opArgs = %s cid = %d requestIndex = %d' % (opArgs, cid, requestIndex))
+
         # start a timer if not head
         if(rid != 0):
             if(await(some(received(('head_responded_to_retransmit', cid1, requestIndex1)), has=(requestIndex1 == requestIndex and cid1 == cid)))):    
@@ -170,17 +173,22 @@ class Replica(process):
             elif timeout(nonhead_timeout/1000):
                 logger.error('Reconfigure at client_retransmit_request timeout cid = %d and requestIndex = %d' % (cid, requestIndex))
                 pass
-    
+   
+
+
     # Only For Head 
-    def receive(msg=('client_request_forward', opArgs, cid, requestIndex), from_=p):
+    def receive(msg=('client_request_forward', opArgs, cid, requestIndex, sourceRid), from_=p):
         
+        logger.info("Received Forwarded request for opArgs = %s cid = %d requestIndex = %d from rid = %d" % (opArgs, cid, requestIndex, sourceRid))
+
         #if this is first forwarded request received at the head
         if retransmitCache.get((cid, requestIndex), None) is None:
             retransmitCache[(cid, requestIndex)] = 'inProcess'
+            
             # send from result cache if available 
             resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
             if resultShuttle is not None:
-                logger.info("Replying to retransmit request from cid = %d and requestIndex = %d" % (cid, requestIndex))
+                logger.info("Replying to retransmit request from cid = %d and requestIndex = %d from resultCache" % (cid, requestIndex))
                 send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)
                 retransmitCache[(cid, requestIndex)] = 'Responded'
                 send(('head_responded_to_retransmit',cid, requestIndex), to=p)
@@ -188,6 +196,8 @@ class Replica(process):
 
             # wait for result shuttle to come back and then response
             elif (cid, requestIndex) in requestCache.keys():
+                logger.info("Waiting for result shuttle to Reply to retransmit request from cid = %d and requestIndex = %d" % (cid, requestIndex))
+                
                 if await(some(received(('result_shuttle', resultShuttle)), has = resultShuttle.cid == cid and resultShuttle.requestIndex == requestIndex)):
                     time.sleep(0.1)
                     resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
@@ -200,6 +210,8 @@ class Replica(process):
             # unrecognized operation
             else:
                
+                logger.info("Creating shuttle for unrecognized retransmit request from cid = %d and requestIndex = %d" % (cid, requestIndex))
+                
                 self.slot_number = self.slot_number + 1;
 
                 # change opArgs if failure case demands
@@ -250,6 +262,8 @@ class Replica(process):
                 send(('head_responded_to_retransmit',cid, requestIndex), to=p)
             elif timeout(head_timeout/1000):          
                 logger.error("Reconfigure at client_request_forward from p =%s", str(p))
+
+
 
 
     def receive(msg=('shuttle', shuttle), from_=p):
@@ -308,6 +322,8 @@ class Replica(process):
         self.incr(self.shuttle_requests, shuttle.cid)
 
 
+
+
     def receive(msg=('result_shuttle', resultShuttle), from_=p):
         logger.info("Result Shuttle Received\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(resultShuttle.cid, resultShuttle.requestIndex,resultShuttle.slot_number))
 
@@ -326,6 +342,8 @@ class Replica(process):
             send(('result_shuttle', resultShuttle), to=prevr)
 
         self.incr(self.result_shuttle_requests, resultShuttle.cid)
+
+
 
 
     def receive(msg=('shutdown',), from_=p):
