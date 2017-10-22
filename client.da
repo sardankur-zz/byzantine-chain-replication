@@ -14,6 +14,7 @@ class Client(process):
         self.on = True
         self.workArgs = []
         self.workIndex = 0
+        self.main_client = None
 
         formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(name)s " + str(self.cid) + " : %(message)s")
         for handler in logger.handlers:
@@ -41,10 +42,11 @@ class Client(process):
                 pass
 
         await(self.on == False)
+        send(('shut',), to=self.main_client)
         logger.info("Terminated")
 
 
     def receive(msg=("shutdown",), from_=p):
         logger.info("Request for shutdown")
-        send(('shut',), to=p)
+        self.main_client = p
         self.on = False

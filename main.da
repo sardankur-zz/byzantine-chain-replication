@@ -32,8 +32,26 @@ def main():
 
     test_config = read_configuration(sys.argv[1])
 
+    # read failure cases
+    failures = {}
+    for key in test_config.keys():
+        if key[:8] == "failures":
+            c, r = key[8:][:-1][1:].split(",")
+            failures[c] = {}
+            failures[c][r] = []
+            failure_op = test_config[key].split(";")
+            ops = []
+            for op in failure_op:
+                trigger, failure = op.split("),")
+                failure = failure[:-2]
+                trigger, args = trigger.split("(")
+                arg1, arg2 = args.split(",")
+                formatted_op = [(trigger.strip(), arg1.strip(), arg2.strip()), failure.strip()]
+                ops.append(formatted_op)
+            failures[c][r].append(ops)
+
     # start olympus
-    olympus = new(Olympus, [test_config['head_timeout'], test_config['nonhead_timeout'], test_config['t']], num=1)
+    olympus = new(Olympus, [test_config['head_timeout'], test_config['nonhead_timeout'], test_config['t'], failures], num=1)
     start(olympus)
 
     send(('init',), to=olympus)
@@ -58,6 +76,7 @@ def main():
     start(clients)
 
     time.sleep(0.2)
+
 
     # shutdown system
     send(("shutdown",), to=clients)

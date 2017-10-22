@@ -38,15 +38,21 @@ class ResultStatement():
         return "%s - %s - %s" % (self.operation, self.result_hash, self.signature)
 
 class Shuttle():
-    def __init__(self, slot_number, opArgs, client):
+    def __init__(self, slot_number, opArgs, client, cid):
         self.slot_number = slot_number
         self.opArgs = opArgs
         self.client = client
+        self.cid = cid
         self.order_proof = []
         self.result_proof = []
 
     def __str__(self):
         return str("Slot_number: %d\nOpt Args : %s\norder_proof: %s\nresult_proof: %s" % (self.slot_number, self.opArgs, self.order_proof, self.result_proof))
+
+class ResultShuttle():
+    def __init__(self, result_proof, cid):
+        self.result_proof = result_proof
+        self.cid = cid
 
 
 class Operation():
