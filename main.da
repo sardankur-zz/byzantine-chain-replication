@@ -37,28 +37,29 @@ def main():
     for key in test_config.keys():
         if key[:8] == "failures":
             c, r = key[8:][:-1][1:].split(",")
-            failures[c] = {}
-            failures[c][r] = []
+            failures[c] = failures.get(c, {})
+            failures[c][r] = failures[c].get(r, [])
             failure_op = test_config[key].split(";")
-            ops = []
             for op in failure_op:
                 trigger, failure = op.split("),")
                 failure = failure[:-2]
                 trigger, args = trigger.split("(")
                 arg1, arg2 = args.split(",")
                 formatted_op = [(trigger.strip(), arg1.strip(), arg2.strip()), failure.strip()]
-                ops.append(formatted_op)
-            failures[c][r].append(ops)
+                failures[c][r].append(formatted_op)
 
     # start olympus
     olympus = new(Olympus, [test_config['head_timeout'], test_config['nonhead_timeout'], test_config['t'], failures], num=1)
     start(olympus)
 
+    # TODO add sleep here
+    # await(timeout(1))
+
     send(('init',), to=olympus)
     # Wait for reconfiguration
 
     # start clients
-    clients = new(Client, num = 2 * test_config['t'] + 1)
+    clients = new(Client, num = test_config['num_client'])
     for i, client in enumerate(clients):
         workload_string = test_config['workload['+str(i)+']'];
         workload_lines = workload_string.split(';')

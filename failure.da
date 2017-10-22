@@ -1,0 +1,26 @@
+common = import_da("common")
+
+OpArgs = common.OpArgs
+
+class Failure():
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def get_failure(failures, trigger, m, c=None, type=None):
+        filtered_failures = []
+        for failure in failures:
+            if trigger == failure[0][0] and failure[0][2] == str(m) and \
+                    (c is None or (c is not None and failure[0][1] == str(c))) and \
+                    (type is None or (type is not None and failure[1] == type)):
+                filtered_failures.append(failure)
+        return filtered_failures
+
+
+    @staticmethod
+    def change_operation():
+        return OpArgs('get', 'x')
+
+    @staticmethod
+    def change_result():
+        return 'OK'

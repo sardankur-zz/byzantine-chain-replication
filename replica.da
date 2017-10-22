@@ -6,6 +6,7 @@ import nacl.encoding
 HASHER = nacl.hash.sha256
 get_logger = import_da("app_logging").get_logger
 common = import_da("common")
+Failure = import_da("failure").Failure
 
 OpArgs = common.OpArgs
 OrderStatement = common.OrderStatement
@@ -41,13 +42,10 @@ class Replica(process):
 
         logger.info("Initialized")
 
-
     def run():
         logger.info("Running")
         await(self.on == False)
         logger.info("Terminated")
-
-
 
 
     def creatSignedOrderStatement(slot_number, opArgs):
@@ -63,11 +61,16 @@ class Replica(process):
         signature = private_key.sign(resultStatement)
         return ResultStatement(opArgs, result_hash, signature)
 
+
     def incr(tracker, cid):
         if tracker.get(str(cid), None) is None:
-           tracker[str(cid)] = 0
+           tracker[str(cid)] = 1
         else:
             tracker[str(cid)] = tracker[str(cid)] + 1
+
+
+    def get(tracker, cid):
+        return tracker.get(str(cid), 0)
 
 
     def isOrderProofValid(slot_number, opArgs, order_proof):
@@ -86,18 +89,35 @@ class Replica(process):
 
 
     def receive(msg=('client_request', opArgs, cid, requestIndex), from_=p):
-        logger.info("Client request from cid = %s requestId = %d received with op args %s" % (str(cid), requestIndex, opArgs))
+        logger.info("Client request from cid = %s requestId = %d received with op args %s"
+                    % (str(cid), requestIndex, opArgs))
 
         self.slot_number = self.slot_number + 1;
+
+        # change opArgs if failure case demands
+        failure = Failure.get_failure(failures, 'client_request', self.get(self.client_requests, cid), cid, 'change_operation')
+        if(len(failure) > 0):
+            opArgs = Failure.change_operation()
+
         shuttle = Shuttle(self.slot_number, opArgs, p, cid, requestIndex)
 
         result = Operation.do_op(dictionary, opArgs)
+
+        # change result if applicable
+        failure = Failure.get_failure(failures, 'client_request', self.get(self.client_requests, cid), cid, 'change_result')
+        if (len(failure) > 0):
+            result = Failure.change_result()
 
         orderStatement = creatSignedOrderStatement(self.slot_number, opArgs)
         shuttle.order_proof.append(orderStatement)
 
         resultStatement = creatSignedResultStatement(opArgs, result)
         shuttle.result_proof.append(resultStatement)
+
+        # change opArgs if failure case demands
+        failure = Failure.get_failure(failures, 'client_request', self.get(self.client_requests, cid), cid, 'drop_result_stmt')
+        if (len(failure) > 0):
+            shuttle.result_proof[0] = None
 
         logger.info("Shuttle Started")
         send(('shuttle', shuttle), to=nextr)
@@ -110,10 +130,21 @@ class Replica(process):
 
         if not isOrderProofValid(shuttle.slot_number, shuttle.opArgs, shuttle.order_proof):
             logger.critical("Order Proof is not valid")
-            return
+
+        # change opArgs if failure case demands
+        failure = Failure.get_failure(failures, 'shuttle', self.get(self.shuttle_requests, shuttle.cid), shuttle.cid,
+                                      'change_operation')
+        if (len(failure) > 0):
+            shuttle.opArgs = Failure.change_operation()
 
         self.slot_number = self.slot_number + 1;
         result = Operation.do_op(dictionary, shuttle.opArgs)
+
+        # change result if applicable
+        failure = Failure.get_failure(failures, 'shuttle', self.get(self.shuttle_requests, shuttle.cid), shuttle.cid,
+                                      'change_result')
+        if (len(failure) > 0):
+            result = Failure.change_result()
 
         orderStatement = creatSignedOrderStatement(self.slot_number, shuttle.opArgs)
         shuttle.order_proof.append(orderStatement)
@@ -121,25 +152,41 @@ class Replica(process):
         resultStatement = creatSignedResultStatement(shuttle.opArgs, result)
         shuttle.result_proof.append(resultStatement)
 
+        # change opArgs if failure case demands
+        failure = Failure.get_failure(failures, 'shuttle', self.get(self.shuttle_requests, shuttle.cid), shuttle.cid,
+                                      'drop_result_stmt')
+        if (len(failure) > 0):
+            shuttle.result_proof[0] = None
+
         if (nextr):
             logger.info("Shuttle Forwarded")
             send(('shuttle', shuttle), to=nextr)
         else:
-            logger.info("Client Response sent to cid = %s" % (str(shuttle.client)))
+            logger.info("Client Response sent to cid = %d" % shuttle.cid)
             send(('client_response', result, shuttle.result_proof, shuttle.requestIndex), to=shuttle.client)
             logger.info("Reverse Shuttle Started")
             reverseShuttle = ReverseShuttle(shuttle)
             send(('reverse_shuttle', reverseShuttle), to=prevr)
 
-        self.incr(self.shuttle_requests, reverseShuttle.cid)
+        self.incr(self.shuttle_requests, shuttle.cid)
+
 
     def receive(msg=('reverse_shuttle', reverseShuttle), from_=p):
         logger.info("Reverse Shuttle Received")
         # cache the result proof
         if (prevr):
             logger.info("Reverse Shuttle Forwarded")
+
+            # change opArgs if failure case demands
+            failure = Failure.get_failure(failures, 'result_shuttle', self.get(self.result_shuttle_requests, reverseShuttle.cid),
+                                          reverseShuttle.cid, 'drop_result_stmt')
+            if (len(failure) > 0):
+                reverseShuttle.result_proof[0] = None
+
             send(('reverse_shuttle', reverseShuttle), to=prevr)
+
         self.incr(self.result_shuttle_requests, reverseShuttle.cid)
+
 
     def receive(msg=('shutdown',), from_=p):
         logger.info("Request for shutdown")
