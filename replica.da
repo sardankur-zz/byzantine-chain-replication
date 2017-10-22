@@ -12,7 +12,7 @@ OpArgs = common.OpArgs
 OrderStatement = common.OrderStatement
 ResultStatement = common.ResultStatement
 Shuttle = common.Shuttle
-ReverseShuttle = common.ReverseShuttle
+ResultShuttle = common.ResultShuttle
 Operation = common.Operation
 Config = common.Config
 ReplicaState = common.ReplicaState
@@ -28,6 +28,7 @@ class Replica(process):
         self.dictionary = {}
         self.private_key = private_key
         self.public_keys = public_keys
+        self.resultShuttleMap = {} 
 
         # tracking of message
         self.client_requests = {}
@@ -78,19 +79,19 @@ class Replica(process):
         for orderStatement in order_proof:
             if (orderStatement.slot_number != slot_number or orderStatement.operation != opArgs):
                 return False
-            else:
-                try:
-                    self.public_keys[i].verify(orderStatement.signature)
-                except Exception:
-                    logger.debug("Order Statement number = %d is not valid" % i)
-                    return False
+
+            try:
+                self.public_keys[i].verify(orderStatement.signature)
+            except Exception:
+                logger.debug("Order Statement number = %d is not valid" % i)
+                return False
+                
             i = i + 1
         return True
 
 
     def receive(msg=('client_request', opArgs, cid, requestIndex), from_=p):
-        logger.info("Client request from cid = %s requestId = %d received with op args %s"
-                    % (str(cid), requestIndex, opArgs))
+        logger.info("Client request from cid = %d requestId = %d received with op args %s" % (cid, requestIndex, opArgs))
 
         self.slot_number = self.slot_number + 1;
 
@@ -164,28 +165,33 @@ class Replica(process):
         else:
             logger.info("Client Response sent to cid = %d" % shuttle.cid)
             send(('client_response', result, shuttle.result_proof, shuttle.requestIndex), to=shuttle.client)
-            logger.info("Reverse Shuttle Started")
-            reverseShuttle = ReverseShuttle(shuttle)
-            send(('reverse_shuttle', reverseShuttle), to=prevr)
-
+            
+            resultShuttle = ResultShuttle(shuttle, result)
+            #store in the cache
+            resultShuttleMap[(resultShuttle.cid, resultShuttle.requestIndex)] = resultShuttle
+            logger.info("Result Shuttle Started")
+            send(('result_shuttle', resultShuttle), to=prevr)
+        
         self.incr(self.shuttle_requests, shuttle.cid)
 
+    def receive(msg=('result_shuttle', resultShuttle), from_=p):
+        logger.info("Result Shuttle Received")
 
-    def receive(msg=('reverse_shuttle', reverseShuttle), from_=p):
-        logger.info("Reverse Shuttle Received")
-        # cache the result proof
+        #cache the result shuttle
+        resultShuttleMap[(resultShuttle.cid, resultShuttle.requestIndex)] = resultShuttle
+
         if (prevr):
-            logger.info("Reverse Shuttle Forwarded")
+            logger.info("Result Shuttle Forwarded")
 
             # change opArgs if failure case demands
-            failure = Failure.get_failure(failures, 'result_shuttle', self.get(self.result_shuttle_requests, reverseShuttle.cid),
-                                          reverseShuttle.cid, 'drop_result_stmt')
+            failure = Failure.get_failure(failures, 'result_shuttle', self.get(self.result_shuttle_requests, resultShuttle.cid),
+                                          resultShuttle.cid, 'drop_result_stmt')
             if (len(failure) > 0):
-                reverseShuttle.result_proof[0] = None
+                resultShuttle.result_proof[0] = None
 
-            send(('reverse_shuttle', reverseShuttle), to=prevr)
+            send(('result_shuttle', resultShuttle), to=prevr)
 
-        self.incr(self.result_shuttle_requests, reverseShuttle.cid)
+        self.incr(self.result_shuttle_requests, resultShuttle.cid)
 
 
     def receive(msg=('shutdown',), from_=p):
