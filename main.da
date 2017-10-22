@@ -39,6 +39,8 @@ def main():
     test_config['nonhead_timeout'] = test_config.get('nonhead_timeout', 2000) / 1000
     test_config['client_timeout'] = test_config.get('client_timeout', 2000) / 1000
 
+    multi_node = test_config.get('multi_node', None)
+
     # read failure cases
     failures = {}
     for key in test_config.keys():
@@ -66,9 +68,12 @@ def main():
     # Wait for reconfiguration
 
     # start clients
-    clients = list(new(Client, num = test_config['num_client']))
+    clients = list(new(Client, num = test_config['num_client'], at=multi_node))
     for i in range(len(clients)):
-        setup(clients[i], (i, test_config['client_timeout'], olympus))
+        if multi_node is None:
+            setup(clients[i], (i, test_config['client_timeout'], olympus))
+        else:
+            setup(clients[i], (i, test_config['client_timeout'], olympus))
     start(set(clients))
 
     for i in range(len(clients)):

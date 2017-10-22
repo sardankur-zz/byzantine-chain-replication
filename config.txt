@@ -30,3 +30,5 @@ test_workload = {'movie': 'star wars'}
 # position in the chain, starting from 0.  replicas without a specified
 # failure scenario are failure-free.
 # failures[0,1] = shuttle(0,1), change_operation()
+
+#multi_node=ClientNode

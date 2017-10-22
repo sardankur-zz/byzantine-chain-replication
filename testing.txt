@@ -1,0 +1,31 @@
+The testing is performed by using a separate config.txt.
+Client workloads, multinode and failure scenarios are documented in each config file.
+
+To run each file with a particular config
+1. For non-multi node scenario
+    python3 -m da main.da CONFIG_FILE
+2. For multi node scenario
+    a) python3 -m da -n MainNode main.da CONFIG_FILE
+    b) python3 -m da -n NODE_NAME -D main.da CONFIG_FILE
+
+Pesudorandom
+Generates request using random number given a particular seed.
+1. Picks key and value from 10 Alphabets
+2. Picks slice indices from 0-3 for left, 0-5 for right
+
+All logs are captured in byzantine.log
+
+Below config files are briefly defined by its purpose and expected results.
+
+1.  file : config_simple.txt
+    purpose : Three simple operations : [put('movie','star'); append('movie',' wars'); get('movie')]
+    expected : state of all replicas : {'movie': 'star wars'}
+
+2.  file : config_stress_test.txt
+    purpose : 2000 pseudorandom requests, 1000 by 2 clients each
+    expected : normal operations and exit
+
+3.  file : config_fail_client_req_change_op.txt
+    purpose : client_request + change operation
+    expected : 5
+
