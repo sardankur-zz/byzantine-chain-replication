@@ -1,4 +1,4 @@
-test_case_name = replica_consistent
+test_case_name = client request + drop result statement
 
 # number of failures to tolerate.  number of replicas is 2t+1.
 t = 1

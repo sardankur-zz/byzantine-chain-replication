@@ -1,4 +1,4 @@
-test_case_name = replica_consistent
+test_case_name = client request + change operation + change result
 
 # number of failures to tolerate.  number of replicas is 2t+1.
 t = 1
@@ -19,4 +19,4 @@ test_workload = {'movie': 'star wars'}
 
 # FAILURE SCENARIO
 # only makes sense for head. Other replicas do not handle this
-failures[0,0] = client_request(0,2), change_operation()
+failures[0,0] = client_request(0,2), change_result()

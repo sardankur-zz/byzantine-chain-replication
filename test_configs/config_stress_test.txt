@@ -1,4 +1,4 @@
-test_case_name = replica_consistent
+test_case_name = config_stress_test
 
 # number of failures to tolerate.  number of replicas is 2t+1.
 t = 1
@@ -17,7 +17,6 @@ workload[1] = pseudorandom(11, 1000)
 
 # TEST
 # No test required for pseudo random
-# test_workload = {"movie": "star wars", "movie1": "star1 wars1", "movie2": "star2 wars2"}
 
 # FAILURE SCENARIO
 # No failure scenarios

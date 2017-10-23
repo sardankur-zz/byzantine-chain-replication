@@ -115,7 +115,7 @@ def main():
                 if test_json != item['dictionary']:
                     logger.error("Replica rid=%d does not match test scenario = %s" % (item['rid'], item['dictionary']))
                 else:
-                    logger.info("Replica rid=%d in matches test scenario = %s" % (item['rid'], item['dictionary']))
+                    logger.info("Replica rid=%d matches test scenario = %s" % (item['rid'], item['dictionary']))
 
         # check validity for each test case
     elif timeout(test_config['client_timeout']):

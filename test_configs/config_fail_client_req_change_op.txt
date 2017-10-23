@@ -1,4 +1,4 @@
-test_case_name = replica_consistent
+test_case_name = client request + change operation
 
 # number of failures to tolerate.  number of replicas is 2t+1.
 t = 1
@@ -15,7 +15,7 @@ nonhead_timeout = 3000
 workload[0] = put('movie','star'); append('movie',' wars'); get('movie')
 
 # TEST
-test_workload = {'movie': 'star'}
+test_workload = {'movie': 'star wars'}
 
 # FAILURE SCENARIO
 # only makes sense for head. Other replicas do not handle this
