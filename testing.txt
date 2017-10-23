@@ -15,62 +15,78 @@ Generates request using random number given a particular seed.
 
 All logs are captured in byzantine.log
 
-Below config files are briefly defined by its purpose and expected results.
+Below config files are briefly defined by its description and expected results.
 
 1.  file : config_simple.txt
-    purpose : Three simple operations : [put('movie','star'); append('movie',' wars'); get('movie')]
+    description : Three simple operations : [put('movie','star'); append('movie',' wars'); get('movie')]
     expected : state of all replicas : {'movie': 'star wars'}
 
 2.  file : config_stress_test.txt
-    purpose : To perform stress test, 2000 pseudorandom requests, 1000 by 2 clients each
+    description :   To perform stress test, 2000 pseudorandom requests, 1000 by 2 clients each
     expected : normal operations and exits
 
 3.  file : config_fail_client_req_change_op.txt
-    purpose : client_request + change operation, change operation on a client request by client
-    expected : Client verifies if the result proof is not valid.
+    description :  client_request + change operation, change operation on a client request by client
+    expected : 1. Client detects that operation has changed
                expected state : {'movie': 'star wars'}, output state : {'movie': 'star'}
 
 4.  file : config_fail_client_req_change_result.txt
-    purpose : client_request + change result, change result on a client request by client
-    expected : Replica checks result proof on result shuttle, client verifies result proof as well,
+    description : client_request + change result, change result on a client request by client
+    expected : 1. Next Replica and Client both detects result is tampered on result shuttle
                expected state : {'movie': 'star wars'}, output state : {'movie': 'star wars'}
 
 5.  file : config_fail_client_req_drop_result_stmnt.txt
-    purpose : client_request + drop result statement, drops result proof from the head
-    expected : Replica checks result proof on result shuttle, client verifies result proof as well,
+    description : client_request + drop result statement, drops result proof from the head
+    expected : 1. Next Replica and Client both detects result proof is tampered on result shuttle
                expected state : {'movie': 'star wars'}, output state : {'movie': 'star'}
 
 6.  file : config_fail_shuttle_req_change_op.txt
-    purpose : shuttle + change operation, change operation on incoming shuttle by a replica. This does not apply to head.
-    expected : The next replica should identify operation has been compromised.
-               Client times out as well, as it does not get the result on time, and retransmits it.
+    description : shuttle + change operation, change operation on incoming shuttle by a replica.
+                  (This does not apply to head.)
+    expected : 1. Replica identifies changed operation and stops forwarding
+               2. Client times out
+               3. Client retransmits request
+               4. Replicas forward to head
+               5. Head waits for result_shuttle to arrive
+               6. Head times out
+               7. Client times out
                expected state : {'movie': 'star wars'}, output state : {'movie': 'star'}
 
 7.  file : config_fail_shuttle_req_change_result.txt
-    purpose : shuttle + change result, change result on incoming shuttle by a replica. This does not apply to head.
-    expected : Replica will identify when result has changed on result shuttle.
-               Client also will identify that result has changed.
+    description : shuttle + change result, change result on incoming shuttle by a replica.
+                  (This does not apply to head.)
+    expected : 1. Next Replica will identify when result has changed on result shuttle.
+               2. Client also will identify that result has changed.
                expected state : {'movie': 'star wars'}, output state : {'movie': 'star wars'}
 
 8.  file : config_fail_shuttle_req_drop_result_stmnt.txt
-    purpose : shuttle + drop result statement, drops result proof on incoming shuttle by replica. This does not apply to head.
-    expected : Replica will identify when result has changed on result shuttle.
-               Client also will identify that result has changed.
+    description :  shuttle + drop result statement, drops result proof on incoming shuttle by replica.
+                   (This does not apply to head.)
+    expected : 1. Replica will identify when result has changed on result shuttle.
+               2. Client also will identify that result has changed.
                expected state : {'movie': 'star wars'}, output state : {'movie': 'star wars'}
 
 9.  file : config_fail_result_shuttle_req_change_result.txt
-    purpose : result_shuttle + change result, changes result when result shuttle arrives
-    expected : Only Replica will identify when result has changed on result shuttle.
+    description : result_shuttle + change result, changes result when result shuttle arrives
+    expected : 1. Only Replica will identify when result has changed on result shuttle.
                expected state : {'movie': 'star wars'}, output state : {'movie': 'star wars'}
 
 10. file : config_fail_result_shuttle_req_drop_result_stmnt.txt
-    purpose : result_shuttle + drop result proof, drops result proof of head when result shuttle arrives
-    expected : Only Replica will identify when result has changed on result shuttle.
+    description : result_shuttle + drop result proof, drops result proof of head when result shuttle arrives
+    expected : 1. Only Replica will identify when result has changed on result shuttle.
                expected state : {'movie': 'star wars'}, output state : {'movie': 'star wars'}
 
 11. file : config_fail_forwarded_req_change_op.txt
-    purpose : forwarded_request + drop result proof, drops result proof of head when result shuttle arrives
-    expected : Only Replica will identify when result has changed on result shuttle.
+    description : forwarded_request + change_operation,
+               1. force forwarded request by failing operation on one of the clients
+               2. change operation on forwarded request
+    expected : 1. Replica identifies changed operation and stops forwarding
+               2. Client times out
+               3. Client retransmits request
+               4. Replicas forward to head
+               5. Head waits for result_shuttle to arrive. No operation on forward_request applicable
+               6. Head times out
+               7. Client times out
                expected state : {'movie': 'star wars'}, output state : {'movie': 'star wars'}
 
 
