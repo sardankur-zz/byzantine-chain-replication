@@ -8,10 +8,6 @@ To run each file with a particular config
     a) python3 -m da -n MainNode main.da CONFIG_FILE
     b) python3 -m da -n NODE_NAME -D main.da CONFIG_FILE
 
-Pesudorandom
-Generates request using random number given a particular seed.
-1. Picks key and value from 10 Alphabets
-2. Picks slice indices from 0-3 for left, 0-5 for right
 
 All logs are captured in byzantine.log
 
