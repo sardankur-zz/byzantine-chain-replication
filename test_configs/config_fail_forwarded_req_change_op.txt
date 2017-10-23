@@ -19,5 +19,5 @@ test_workload = {'movie': 'star'}
 
 # FAILURE SCENARIO
 # only makes sense for head. Other replicas do not handle this
-# failures[0,0] = forwarded_request(0,0), remove_from_cache()
-# failures[0,1] = shuttle(0,0), change_operation()
+failures[0,0] = forwarded_request(0,0), change_operation()
+failures[0,1] = shuttle(0,0), change_operation()

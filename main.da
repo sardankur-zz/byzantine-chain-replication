@@ -34,6 +34,8 @@ def main():
      
     test_config = read_configuration(sys.argv[1])
 
+    logger.info("Running Test Case : %s" % test_config.get('test_case_name', ''))
+
     # change timeouts to seconds
     test_config['head_timeout'] = test_config.get('head_timeout', 2000) / 1000
     test_config['nonhead_timeout'] = test_config.get('nonhead_timeout', 2000) / 1000
@@ -116,6 +118,9 @@ def main():
                     logger.error("Replica rid=%d does not match test scenario = %s" % (item['rid'], item['dictionary']))
                 else:
                     logger.info("Replica rid=%d matches test scenario = %s" % (item['rid'], item['dictionary']))
+        else:
+            for i, item in enumerate(replica_states):
+                logger.info("Replica state for rid =%d is = %s"  % (item['rid'], item['dictionary']))
 
         # check validity for each test case
     elif timeout(test_config['client_timeout']):
