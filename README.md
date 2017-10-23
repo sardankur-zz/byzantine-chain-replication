@@ -23,8 +23,9 @@ INSTRUCTIONS:
 1. pip3 install pyDistAlgo
 2. pip3 install pynacl
 3. pip3 install <module_name> : for all the modules mentioned in Platform
-4. Run command 'python3 -m da main.da <CONFIG_FILE>' : one config file per testcase as mentioned in testing.txt
-5. Logs will appear on the terminal as well as stored in file 'Byzantine.log'
+4. Compile each .da file with command 'python3 -m da <FILE.da>
+5. Run command 'python3 -m da main.da <CONFIG_FILE>' : one config file per testcase as mentioned in testing.txt
+6. Logs will appear on the terminal as well as stored in file 'Byzantine.log'
 
  
 ===========================================================================
