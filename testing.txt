@@ -89,4 +89,14 @@ Below config files are briefly defined by its description and expected results.
                7. Client times out
                expected state : {'movie': 'star wars'}, output state : {'movie': 'star wars'}
 
+12. file : config_multinode.txt
+    description : to test on multiple node
+    commands : 1. python3 -m da -n MainNode main.da test_configs/config_multinode.txt
+               2. python3 -m da -n ClientNode -D main.da test_configs/config_multinode.txt
+    expected:  1. Normal execution on two different terminal nodes.
+               2. Clients and (Olympus and Replicas) on separate terminals
+
+13. file : config_default.txt
+    description : default config provided in README without failure conditions of phase 3
+    expected : {'movie': 'star wars', 'jedi': 'luke', 'B': 'E'}
 
