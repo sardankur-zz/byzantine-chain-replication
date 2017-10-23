@@ -18,4 +18,4 @@ workload[0] = put('movie','star'); append('movie',' wars'); get('movie')
 test_workload = {'movie': 'star wars'}
 
 # FAILURE SCENARIO
-failures[0,1] = result_shuttle(0,1), change_result()
+failures[0,1] = result_shuttle(0,2), change_result()

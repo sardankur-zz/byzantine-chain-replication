@@ -116,6 +116,10 @@ def main():
                     logger.error("Replica rid=%d does not match test scenario = %s" % (item['rid'], item['dictionary']))
                 else:
                     logger.info("Replica rid=%d in matches test scenario = %s" % (item['rid'], item['dictionary']))
+        else:
+            for i, item in enumerate(replica_states):
+                logger.info("Replica state for rid =%d is = %s"  % (item['rid'], item['dictionary']))
+                        
 
         # check validity for each test case
     elif timeout(test_config['client_timeout']):
