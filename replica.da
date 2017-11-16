@@ -332,7 +332,7 @@ class Replica(process):
                 if await(some(received(('result_shuttle', resultShuttle)),has = resultShuttle.cid == cid and resultShuttle.requestIndex == requestIndex)):
                     time.sleep(0.1)
                     resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
-                    logger.info("result_shuttle on newly created request for arrived cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid)) 
+                    logger.info("result_shuttle on newly created request has arrived for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
 
                     send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)
                     retransmitCache[(cid, requestIndex)] = 'Responded'
@@ -440,7 +440,6 @@ class Replica(process):
     def receive(msg=('result_shuttle', resultShuttle), from_=p):
         logger.info("Result Shuttle Received\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(resultShuttle.cid, resultShuttle.requestIndex,resultShuttle.slot_number))
         
-
         if not isvalidResultProof(resultShuttle.opArgs, resultShuttle.result, resultShuttle.result_proof, self.public_keys):
             logger.error("Reconfigure: Result Proof is not valid for cid = %d requestIndex = %d" % (resultShuttle.cid, resultShuttle.requestIndex))
             return
