@@ -191,7 +191,7 @@ class Replica(process):
                 logger.info('Head responded to retransmit request for cid = %d requestIndex = %d' % (cid, requestIndex))
                 resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
 
-                if resultShuttle is not None: # this can still result none (unlikely), in that case the replica should reconfigure
+                if resultShuttle is not None: # this can still have result as none (unlikely), in that case the replica should reconfigure
                     logger.info("Replying to retransmit request from cid = %d and requestIndex = %d" % (cid, requestIndex))
                     send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=p)
                 else:
