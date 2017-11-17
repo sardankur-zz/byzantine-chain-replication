@@ -4,6 +4,7 @@ import nacl.signing
 import nacl.hash
 import nacl.encoding
 import time
+import pylru
 
 HASHER = nacl.hash.sha256
 get_logger = import_da("app_logging").get_logger
@@ -28,9 +29,11 @@ class Replica(process):
         self.on = True
         self.slot_number = -1 # so that number starts from zero
         self.dictionary = {}
-        self.resultShuttleCache = {}
-        self.retransmitCache = {}
-        self.requestCache = {}
+        self.cacheSize = 10000
+        
+        self.resultShuttleCache = pylru.lrucache(self.cacheSize)
+        self.retransmitCache = pylru.lrucache(self.cacheSize)
+        self.requestCache = pylru.lrucache(self.cacheSize)
 
         self.rnum = len(replicas)
         self.nextr = replicas[rid + 1] if (rid < rnum-1) else None
