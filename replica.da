@@ -5,11 +5,13 @@ import nacl.hash
 import nacl.encoding
 import time
 import pylru
+from utils import *
 
 HASHER = nacl.hash.sha256
 get_logger = import_da("app_logging").get_logger
 common = import_da("common")
 Failure = import_da("failure").Failure
+
 
 OpArgs = common.OpArgs
 OrderStatement = common.OrderStatement
@@ -22,15 +24,24 @@ ReplicaState = common.ReplicaState
 
 logger = get_logger("REPLICA")
 
+def incr(tracker, cid):
+    if tracker.get(str(cid), None) is None:
+       tracker[str(cid)] = 1
+    else:
+        tracker[str(cid)] = tracker[str(cid)] + 1
+
+def get(tracker, cid):
+    return tracker.get(str(cid), 0)
+
 class Replica(process):
     
 
-    def setup(head_timeout: int, nonhead_timeout: int, rid: int, replicas, private_key, public_keys, failures):
+    def setup(head_timeout: int, nonhead_timeout: int, rid: int, olympus, replicas, private_key, public_keys, failures):
         self.on = True
         self.slot_number = -1 # so that number starts from zero
         self.dictionary = {}
         self.cacheSize = 10000
-        
+
         self.resultShuttleCache = pylru.lrucache(self.cacheSize)
         self.retransmitCache = pylru.lrucache(self.cacheSize)
         self.requestCache = pylru.lrucache(self.cacheSize)
@@ -59,76 +70,6 @@ class Replica(process):
         logger.info("Terminated")
 
 
-    def creatSignedOrderStatement(slot_number, opArgs):
-        orderStatement = str(slot_number) + str(opArgs)
-        orderStatement = orderStatement.encode(encoding='UTF-8')
-        signature = private_key.sign(orderStatement)
-        return OrderStatement(self.slot_number, opArgs, signature)
-
-
-    def creatSignedResultStatement(opArgs, result):
-        result_hash = HASHER(result.encode(encoding='UTF-8'), encoder=nacl.encoding.HexEncoder)
-        resultStatement = str(opArgs).encode(encoding='UTF-8') + result_hash
-        signature = private_key.sign(resultStatement)
-        return ResultStatement(opArgs, result_hash, signature)
-
-
-    def incr(tracker, cid):
-        if tracker.get(str(cid), None) is None:
-           tracker[str(cid)] = 1
-        else:
-            tracker[str(cid)] = tracker[str(cid)] + 1
-
-
-    def get(tracker, cid):
-        return tracker.get(str(cid), 0)
-
-
-    def isOrderProofValid(slot_number, opArgs, order_proof):
-        i = 0
-        for orderStatement in order_proof:
-            if orderStatement is None:
-                logger.debug("Order Statement number = %d is missing" % i)
-                return False
-            if orderStatement.slot_number != slot_number:
-                logger.debug("Slot number for Order Statement number = %d is not correct" % i)
-                return False
-            if orderStatement.operation != opArgs:
-                logger.debug("opArgs for Order Statement number = %d is not valid" % i)
-                return False
-            try:
-                self.public_keys[i].verify(orderStatement.signature)
-            except Exception:
-                logger.debug("Order Statement number = %d is tempered" % i)
-                return False   
-            i = i + 1
-            
-        return True
-
-    
-    def isvalidResultProof(opArgs, result, result_proof, public_keys):
-        result_hash = HASHER(result.encode(encoding='UTF-8'), encoder=nacl.encoding.HexEncoder)
-        i = 0
-
-        for resultStatement in result_proof:
-            if resultStatement is None:
-                logger.debug("Result statement number = %d is missing" % i)
-                return False   
-            if opArgs != resultStatement.operation:
-                logger.debug("opArgs for Result statement number = %d is not valid" % i)
-                return False         
-            if not sodium_memcmp(resultStatement.result_hash, result_hash):
-                logger.debug("Result Hash for Result statement number = %d is not valid" % i)
-                return False
-
-            try:
-                public_keys[i].verify(resultStatement.signature)
-            except Exception:
-                logger.debug("Result Statement number = %d is tempered" % i)
-                return False
-            i = i + 1
-
-        return True 
 
     def receive(msg=('client_request', opArgs, cid, requestIndex), from_=p):
         logger.info("Client request from cid = %d requestId = %d received with op args %s" % (cid, requestIndex, opArgs))
@@ -152,10 +93,10 @@ class Replica(process):
         if (len(failure) > 0):
             result = Failure.change_result()
 
-        orderStatement = creatSignedOrderStatement(self.slot_number, opArgs)
+        orderStatement = creatSignedOrderStatement(self.slot_number, opArgs, private_key)
         shuttle.order_proof.append(orderStatement)
 
-        resultStatement = creatSignedResultStatement(opArgs, result)
+        resultStatement = creatSignedResultStatement(opArgs, result, private_key)
         shuttle.result_proof.append(resultStatement)
 
         # change opArgs if failure case demands
@@ -199,9 +140,10 @@ class Replica(process):
                     send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=p)
                 else:
                     logger.error('Reconfigure: client_retransmit_request empty cache on confiramtion receipt cid = %d and requestIndex = %d' % (cid, requestIndex))
-
+                    send(('reconfigure'), to=olympus)
             elif timeout(nonhead_timeout):
                 logger.error('Reconfigure: Client_request_forward timeout cid = %d and requestIndex = %d' % (cid, requestIndex))
+                send(('reconfigure'), to=olympus)
                 
    
 
@@ -286,7 +228,7 @@ class Replica(process):
 
                 elif timeout(head_timeout):
                     logger.error("Reconfigure: head timed out waiting for result shuttle for the operation in queue for cid = %d and requestIndex = %d" % (cid, requestIndex))
-
+                    send(('reconfigure'), to=olympus)
             
             # unrecognized operation
             else:
@@ -312,10 +254,10 @@ class Replica(process):
                 if (len(failure) > 0):
                     result = Failure.change_result()
 
-                orderStatement = creatSignedOrderStatement(self.slot_number, opArgs)
+                orderStatement = creatSignedOrderStatement(self.slot_number, opArgs, private_key)
                 shuttle.order_proof.append(orderStatement)
 
-                resultStatement = creatSignedResultStatement(opArgs, result)
+                resultStatement = creatSignedResultStatement(opArgs, result, private_key)
                 shuttle.result_proof.append(resultStatement)
 
                 # change opArgs if failure case demands
@@ -343,15 +285,15 @@ class Replica(process):
 
                 elif timeout(head_timeout):
                     logger.error("Reconfigure: head timeout waiting for result_shuttle on newly created request cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
-
+                    send(('reconfigure'), to=olympus)
 
 
     def receive(msg=('shuttle', shuttle), from_=p):
         logger.info("Shuttle Received\t\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(shuttle.cid, shuttle.requestIndex,shuttle.slot_number))
 
-        if not isOrderProofValid(shuttle.slot_number, shuttle.opArgs, shuttle.order_proof):
+        if not isOrderProofValid(shuttle.slot_number, shuttle.opArgs, shuttle.order_proof, self.public_keys):
             logger.error("Reconfigure: Order Proof is not valid cid = %d requestIndex = %d slot_number = %d" % (shuttle.cid, shuttle.requestIndex, shuttle.slot_number))
-            # send wedged statement to olympus
+            send(('reconfigure'), to=olympus)
             return
          
         # change opArgs if failure case demands
@@ -372,10 +314,10 @@ class Replica(process):
         if (len(failure) > 0):
             result = Failure.change_result()
 
-        orderStatement = creatSignedOrderStatement(self.slot_number, shuttle.opArgs)
+        orderStatement = creatSignedOrderStatement(self.slot_number, shuttle.opArgs, private_key)
         shuttle.order_proof.append(orderStatement)
 
-        resultStatement = creatSignedResultStatement(shuttle.opArgs, result)
+        resultStatement = creatSignedResultStatement(shuttle.opArgs, result, private_key)
         shuttle.result_proof.append(resultStatement)
 
         # change opArgs if failure case demands
@@ -395,6 +337,7 @@ class Replica(process):
 
             if not isvalidResultProof(shuttle.opArgs, resultShuttle.result, resultShuttle.result_proof, self.public_keys):
                 logger.error("Reconfigure: Result Proof is not valid for cid = %d requestIndex = %d" % (resultShuttle.cid, resultShuttle.requestIndex))
+                send(('reconfigure'), to=olympus)
                 return
 
             #store in the cache
@@ -431,6 +374,7 @@ class Replica(process):
         
         if not isvalidResultProof(resultShuttle.opArgs, resultShuttle.result, resultShuttle.result_proof, self.public_keys):
             logger.error("Reconfigure: Result Proof is not valid for cid = %d requestIndex = %d" % (resultShuttle.cid, resultShuttle.requestIndex))
+            send(('reconfigure'), to=olympus)
             return
 
         #cache the result shuttle
