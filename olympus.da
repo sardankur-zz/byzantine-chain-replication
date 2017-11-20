@@ -1,5 +1,6 @@
 import json
 import nacl.signing
+import time
 
 get_logger = import_da("app_logging").get_logger
 Replica = import_da("replica").Replica
@@ -10,12 +11,12 @@ logger = get_logger("OLYMPUS")
 
 class Olympus(process):
 
-
     def setup(head_timeout: int, nonhead_timeout: int, t: int, failures, host_replica):
+    
         self.on = True
         self.configs = []
         self.default_timeout = 3
-        logger.info("setup Completed")
+        logger.info("Setup Completed")
 
 
     # receivers
@@ -30,13 +31,16 @@ class Olympus(process):
         send(('latest_configuration_response', self.configs[len(self.configs) - 1]), to=p)
 
 
-    # Not required now
-    def receive(msg=('reconfigure', proof), from_=p):
+    def receive(msg=('reconfigure_client_request', result_proof), from_=p):
         pass
 
+    def receive(msg=('reconfigure'), from_=p):
+        logger.info("Received Reconfigure Request")
 
-    def receive(msg=('init',), from_=p):
-        logger.info("Init received")        
+        replicas = self.configs[len(self.configs) - 1].replicas
+        send(('wedge_request'), to=replicas)
+
+    def receive(msg=('olympus_run',), from_=p):        
 
         config = Config()
 
@@ -45,22 +49,21 @@ class Olympus(process):
         # initializing replicas
         config.replicas = []
         for i in range(2*t + 1):
-            replica = new(Replica, num=1, at = host_replica.get(str(i), "default"))
-            config.replicas.append(replica)        
-        config.head = config.replicas[0]
-        config.tail = config.replicas[len(config.replicas) - 1]
-        
-        #initialize public and private keys
-        for i in range(2*t + 1):
-            signingKey = nacl.signing.SigningKey.generate()
+            replica = new(Replica, num=1, at=host_replica.get(str(i), "default"))                                    
+            signingKey = nacl.signing.SigningKey.generate()                                
             config.private_keys.append(signingKey)
-            config.public_keys.append(signingKey.verify_key)
-
-        #Setting up the replicas 
-        for i in range(2*t + 1):
-            setup(config.replicas[i], (head_timeout, nonhead_timeout, i, config.replicas, config.private_keys[i], config.public_keys, failure_cases.get(str(i), [])))
-            start(config.replicas[i])
+            config.public_keys.append(signingKey.verify_key)   
+            config.replicas.append(replica)        
         
+        config.head = config.replicas[0]
+        config.tail = config.replicas[len(config.replicas) - 1]                
+
+        time.sleep(0.2)
+
+        for i in range(2*t + 1):
+            setup(config.replicas[i], (head_timeout, nonhead_timeout, i, self, config.replicas, config.private_keys[i], config.public_keys, failure_cases.get(str(i), [])))                        
+            start(config.replicas[i])                
+
         self.configs.append(config)
 
 
@@ -74,17 +77,21 @@ class Olympus(process):
 
         replica_state = None
 
-        await(len(setof(p, received(('replica_shut', replica_state), from_=p))) == len(replicas))
-        replica_states = setof(replica_state, received(('replica_shut', replica_state), from_=p))
-        
-        # elif timeout(self.default_timeout):
-        #     replica_states = setof(replica_state, received(('replica_shut', replica_state), from_=p))
+        if (await(len(setof(p, received(('replica_shut', replica_state), from_=p))) == len(replicas))):
+            replica_states = setof(replica_state, received(('replica_shut', replica_state), from_=p))        
+            deserialized_states = []
+            for replica_state in replica_states:
+                replica_state = json.loads(replica_state)
+                deserialized_states.append(replica_state)
+            
+            send(('olympus_shut', json.dumps(deserialized_states)), to=p)
+        elif timeout(self.default_timeout):
+            logger.info("Timeout from Replicas")       
 
-        deserialized_states = []
-        for replica_state in replica_states:
-            replica_state = json.loads(replica_state)
-            deserialized_states.append(replica_state)
-        
-        send(('olympus_shut', json.dumps(deserialized_states)), to=p)
+            # kill replicas explicitly
+            # for replica in replicas:
+            #     stop(replica)        
+
+
         self.on = False
 

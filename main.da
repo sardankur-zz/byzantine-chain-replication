@@ -89,10 +89,10 @@ def main():
         test_config['nonhead_timeout'], test_config['t'], failures, host["replica"]), \
         num=1, at=host.get("olympus", "default"))
     start(olympus)    
-    send(('init',), to=olympus)    
+    
+    send(('olympus_run',), to=olympus)    
 
     time.sleep(0.2)
-
 
     # start clients
     logger.info("Creating Clients")

@@ -1,0 +1,82 @@
+from nacl.bindings.utils import sodium_memcmp
+import logging
+import nacl.signing
+import nacl.hash
+import nacl.encoding
+import time
+import pylru
+
+HASHER = nacl.hash.sha256
+get_logger = import_da("app_logging").get_logger
+common = import_da("common")
+
+
+OpArgs = common.OpArgs
+OrderStatement = common.OrderStatement
+ResultStatement = common.ResultStatement
+Shuttle = common.Shuttle
+ResultShuttle = common.ResultShuttle
+Operation = common.Operation
+Config = common.Config
+ReplicaState = common.ReplicaState
+
+logger = get_logger("UTIL")
+
+def creatSignedOrderStatement(slot_number, opArgs, private_key_param):
+    orderStatement = str(slot_number) + str(opArgs)
+    orderStatement = orderStatement.encode(encoding='UTF-8')
+    signature = private_key_param.sign(orderStatement)
+    return OrderStatement(slot_number, opArgs, signature)
+
+
+def creatSignedResultStatement(opArgs, result, private_key_param):
+    result_hash = HASHER(result.encode(encoding='UTF-8'), encoder=nacl.encoding.HexEncoder)
+    resultStatement = str(opArgs).encode(encoding='UTF-8') + result_hash
+    signature = private_key_param.sign(resultStatement)
+    return ResultStatement(opArgs, result_hash, signature)
+
+
+def isvalidResultProof(opArgs, result, result_proof, public_keys_param):
+    result_hash = HASHER(result.encode(encoding='UTF-8'), encoder=nacl.encoding.HexEncoder)
+    i = 0
+
+    for resultStatement in result_proof:
+        if resultStatement is None:
+            logger.debug("Result statement number = %d is missing" % i)
+            return False   
+        if opArgs != resultStatement.operation:
+            logger.debug("opArgs for Result statement number = %d is not valid" % i)
+            return False         
+        if not sodium_memcmp(resultStatement.result_hash, result_hash):
+            logger.debug("Result Hash for Result statement number = %d is not valid" % i)
+            return False
+
+        try:
+            public_keys_param[i].verify(resultStatement.signature)
+        except Exception:
+            logger.debug("Result Statement number = %d is tempered" % i)
+            return False
+        i = i + 1
+
+    return True 
+
+def isOrderProofValid(slot_number, opArgs, order_proof, public_keys_param):
+    i = 0
+    for orderStatement in order_proof:
+        if orderStatement is None:
+            logger.debug("Order Statement number = %d is missing" % i)
+            return False
+        if orderStatement.slot_number != slot_number:
+            logger.debug("Slot number for Order Statement number = %d is not correct" % i)
+            return False
+        if orderStatement.operation != opArgs:
+            logger.debug("opArgs for Order Statement number = %d is not valid" % i)
+            return False
+        try:
+            public_keys_param[i].verify(orderStatement.signature)
+        except Exception:
+            logger.debug("Order Statement number = %d is tempered" % i)
+            return False   
+        i = i + 1
+        
+    return True
