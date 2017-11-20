@@ -19,11 +19,13 @@ class Client(process):
         self.on = True
         self.workArgs = []
         self.requestIndex = 0
-        self.main_client = None
+        self.main_thread = None
 
         formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(name)s " + str(self.cid) + " : %(message)s")
         for handler in logger.handlers:
             handler.setFormatter(formatter)
+
+        logger.info("setup Completed")
 
     
     def isvalidResultProof(opArgs, result, result_proof, public_keys):
@@ -54,7 +56,7 @@ class Client(process):
     def run():
         logger.info("Running")
         await(self.on == False)
-        send(('shut',), to=self.main_client)
+        send(('client_shut',), to=self.main_thread)
         logger.info("Terminated")
 
 
@@ -69,7 +71,7 @@ class Client(process):
 
     def receive(msg=('client_run',), from_=p):
 
-        self.main_client = p
+        self.main_thread = p
 
         # get the permanent configuration (phase 2 limitation)
         clk = logical_clock()

@@ -17,7 +17,7 @@ head_timeout = 3000
 nonhead_timeout = 3000
 
 # CLIENT WORKLOAD
-workload[0] = put('movie','star'); append('movie',' wars'); get('movie')
+workload[0] = put('movie','star')
 # workload[0] = pseudorandom(1, 1000)
 
 # TEST
@@ -31,4 +31,6 @@ test_workload = {'movie': 'star wars'}
 # failure scenario are failure-free.
 # failures[0,1] = shuttle(0,1), change_operation()
 
-#multi_node=ClientNode
+multi_node = False
+host_client[0] = Client
+host_replica[0] = R1

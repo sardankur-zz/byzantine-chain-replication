@@ -11,7 +11,7 @@ logger = get_logger("OLYMPUS")
 class Olympus(process):
 
 
-    def setup(head_timeout: int, nonhead_timeout: int, t: int, failures):
+    def setup(head_timeout: int, nonhead_timeout: int, t: int, failures, host_replica):
         self.on = True
         self.configs = []
         self.default_timeout = 3
@@ -20,7 +20,9 @@ class Olympus(process):
 
     # receivers
     def run():
-        await(self.on == False)
+        logger.info("Running")
+        await(self.on == False)        
+        logger.info("Terminated")
 
 
     def receive(msg=('latest_configuration_request', cid), from_=p):
@@ -34,18 +36,19 @@ class Olympus(process):
 
 
     def receive(msg=('init',), from_=p):
-        logger.info("Init received")
+        logger.info("Init received")        
 
         config = Config()
 
         failure_cases = failures.get(str(0), {})
         
         # initializing replicas
-        config.replicas = new(Replica, num=2 * t + 1)
-
-        replica_list = list(config.replicas)
-        config.head = replica_list[0]
-        config.tail = replica_list[len(replica_list) - 1]
+        config.replicas = []
+        for i in range(2*t + 1):
+            replica = new(Replica, num=1, at = host_replica.get(str(i), "default"))
+            config.replicas.append(replica)        
+        config.head = config.replicas[0]
+        config.tail = config.replicas[len(config.replicas) - 1]
         
         #initialize public and private keys
         for i in range(2*t + 1):
@@ -55,28 +58,33 @@ class Olympus(process):
 
         #Setting up the replicas 
         for i in range(2*t + 1):
-            setup(replica_list[i], (head_timeout, nonhead_timeout, i, replica_list, config.private_keys[i], config.public_keys, failure_cases.get(str(i), [])))
-
-        start(config.replicas)
+            setup(config.replicas[i], (head_timeout, nonhead_timeout, i, config.replicas, config.private_keys[i], config.public_keys, failure_cases.get(str(i), [])))
+            start(config.replicas[i])
+        
         self.configs.append(config)
 
 
     def receive(msg=("shutdown",), from_=p):
         logger.info("Request for shutdown")
+        
         replicas = self.configs[len(self.configs) - 1].replicas
-        send(('shutdown',), to=replicas)
+        
+        for replica in replicas:
+            send(('shutdown',), to=replica)
+
         replica_state = None
 
-        if await(len(setof(p, received(('shut', replica_state), from_=p))) == len(list(replicas))):
-            replica_states = setof(replica_state, received(('shut', replica_state), from_=p))
-        elif timeout(self.default_timeout):
-            replica_states = setof(replica_state, received(('shut', replica_state), from_=p))
+        await(len(setof(p, received(('replica_shut', replica_state), from_=p))) == len(replicas))
+        replica_states = setof(replica_state, received(('replica_shut', replica_state), from_=p))
+        
+        # elif timeout(self.default_timeout):
+        #     replica_states = setof(replica_state, received(('replica_shut', replica_state), from_=p))
 
         deserialized_states = []
         for replica_state in replica_states:
             replica_state = json.loads(replica_state)
             deserialized_states.append(replica_state)
-
-        send(('shut', json.dumps(deserialized_states)), to=p)
+        
+        send(('olympus_shut', json.dumps(deserialized_states)), to=p)
         self.on = False
 

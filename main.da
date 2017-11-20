@@ -12,8 +12,7 @@ Client = import_da("client").Client
 
 logger = get_logger("MAIN")
 
-def read_configuration(filename):
-    logger.info("Reading Test Configuration")
+def read_configuration(filename):    
     test_config = {}
     with open(filename, 'r') as f:
         for line in f:
@@ -32,19 +31,23 @@ def main():
      
     config(clock='Lamport') 
      
+
+    # read configuration
+    logger.info("Reading Configuration")
     test_config = read_configuration(sys.argv[1])
+    
 
-    logger.info("Running Test Case : %s" % test_config.get('test_case_name', ''))
-
-    # change timeouts to seconds
+    # parse configuration    
     test_config['head_timeout'] = test_config.get('head_timeout', 2000) / 1000
     test_config['nonhead_timeout'] = test_config.get('nonhead_timeout', 2000) / 1000
-    test_config['client_timeout'] = test_config.get('client_timeout', 2000) / 1000
+    test_config['client_timeout'] = test_config.get('client_timeout', 2000) / 1000    
+    multi_node = test_config.get('multi_node', 'False') == "True"
 
-    multi_node = test_config.get('multi_node', None)
-
-    # read failure cases
+    
     failures = {}
+    workload = {}
+    host = {"client" : {}, "replica" : {}}    
+
     for key in test_config.keys():
         if key[:8] == "failures":
             c, r = key[8:][:-1][1:].split(",")
@@ -58,58 +61,74 @@ def main():
                 arg1, arg2 = args.split(",")
                 formatted_op = [(trigger.strip(), arg1.strip(), arg2.strip()), failure.strip()]
                 failures[c][r].append(formatted_op)
+        elif key[:11] == "host_client" and multi_node:
+            c = key[11:][:-1][1:]
+            host["client"][c] = test_config[key]
+        elif key[:12] == "host_replica" and multi_node:    
+            r = key[12:][:-1][1:]
+            host["replica"][c] = test_config[key]
+        elif key[:12] == "host_olympus" and multi_node:
+            host["olympus"] = test_config[key]    
+        elif key[:8] == "workload":
+            c = key[8:][:-1][1:] 
+            workload_lines = test_config[key].split(';')
+            opSequence = []
+            for line in workload_lines:
+                line = line.replace("'", "")
+                words = re.split('[(),]+',line.strip())
+                opSequence.append(words[:-1])
 
-    # start olympus
-    olympus = new(Olympus, [test_config['head_timeout'], test_config['nonhead_timeout'], test_config['t'], failures], num=1)
-    start(olympus)
+            if opSequence[0][0] == 'pseudorandom':
+                opSequence = Operation.generate_requests(int(opSequence[0][1]), int(opSequence[0][2]))
+            workload[c] = opSequence
 
-    # TODO add sleep here
-    # await(timeout(1))
 
-    send(('init',), to=olympus)
-    # Wait for reconfiguration
+    # start Olympus
+    logger.info("Creating Olympus")
+    olympus = new(Olympus, (test_config['head_timeout'], \
+        test_config['nonhead_timeout'], test_config['t'], failures, host["replica"]), \
+        num=1, at=host.get("olympus", "default"))
+    start(olympus)    
+    send(('init',), to=olympus)    
+
+    time.sleep(0.2)
+
 
     # start clients
-    clients = list(new(Client, num = test_config['num_client'], at=multi_node))
-    for i in range(len(clients)):
-        if multi_node is None:
-            setup(clients[i], (i, test_config['client_timeout'], olympus))
-        else:
-            setup(clients[i], (i, test_config['client_timeout'], olympus))
-    start(set(clients))
-
-    for i in range(len(clients)):
-        workload_string = test_config['workload['+str(i)+']'];
-        workload_lines = workload_string.split(';')
-        opSequence = []
-        for line in workload_lines:
-            line = line.replace("'", "")
-            words = re.split('[(),]+',line.strip())
-            opSequence.append(words[:-1])
-
-        if opSequence[0][0] == 'pseudorandom':
-            opSequence = Operation.generate_requests(int(opSequence[0][1]), int(opSequence[0][2]))
+    logger.info("Creating Clients")
+    clients = []    
+    for i in range(test_config["num_client"]):
+        client = new(Client, num=1, at=host["client"].get(str(i), "default"))
+        setup(client, (i, test_config['client_timeout'], olympus))
+        start(client)
 
         index = 0
+        opSequence = workload[str(i)]
         while index < len(opSequence):
             nextIndex = min(index + 100, len(opSequence))
             clk = logical_clock()
-            send(('client_workload', opSequence[index:nextIndex]), to=clients[i])
-            await(some(received(('client_workload_ack', cid), clk=rclk), has= (rclk > clk and i == cid)))
-            # await(some(received(('client_workload_ack', cid), clk = rclk), has = (i == cid and rclk > clk)))
+            send(('client_workload', opSequence[index:nextIndex]), to=client)
+            await(some(received(('client_workload_ack', cid), clk=rclk), has= (rclk > clk and i == cid)))            
             index = nextIndex
 
-    send(('client_run',), to=set(clients))
-    time.sleep(0.2)
+        clients.append(client)         
 
-    # waiting for clients to finish their workload
-    await(each(c in clients, has=received(('shut',), from_=c)))
+
+
+    logger.info("Running Test Case : %s" % test_config.get('test_case_name', ''))
+    for client in clients:
+        send(('client_run',), to=client)
+
+
+    # waiting for clients to finish their workload        
+    await(len(setof(p, received(('client_shut',), from_=p))) == len(clients))
     logger.info("Clients are shut")
+
 
     send(("shutdown",), to=olympus)
 
-    if await(len(setof(p, received(('shut', replica_state), from_=p))) == 1):
-        replica_states = setof(replica_state, received(('shut', replica_state), from_=p))
+    if await(len(setof(p, received(('olympus_shut', replica_state), from_=p))) == 1):
+        replica_states = setof(replica_state, received(('olympus_shut', replica_state), from_=p))
         replica_states = json.loads(next(iter(replica_states)))
         if 'test_workload' in test_config.keys():
             for i, item in enumerate(replica_states):

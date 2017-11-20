@@ -51,7 +51,7 @@ class Replica(process):
         for handler in logger.handlers:
             handler.setFormatter(formatter)
 
-        logger.info("Initialized")
+        logger.info("setup Completed")
 
     def run():
         logger.info("Running")
@@ -460,5 +460,5 @@ class Replica(process):
 
     def receive(msg=('shutdown',), from_=p):
         logger.info("Request for shutdown")
-        send(('shut', str(ReplicaState(self.rid, self.dictionary))), to=p)
+        send(('replica_shut', str(ReplicaState(self.rid, self.dictionary))), to=p)
         self.on = False
