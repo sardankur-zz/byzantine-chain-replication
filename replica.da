@@ -25,23 +25,16 @@ ReplicaState = common.ReplicaState
 
 logger = get_logger("REPLICA")
 
-def incr(tracker, cid):
-    if tracker.get(str(cid), None) is None:
-       tracker[str(cid)] = 1
-    else:
-        tracker[str(cid)] = tracker[str(cid)] + 1
-
-def get(tracker, cid):
-    return tracker.get(str(cid), 0)
-
 class Replica(process):
     
-
     def setup(head_timeout: int, nonhead_timeout: int, rid: int, olympus, replicas, private_key, public_keys, failures):
         self.on = True
+        self.state = 'Normal'
         self.slot_number = -1 # so that number starts from zero
         self.dictionary = {}
         self.cacheSize = 10000
+
+        self.history = []
 
         self.resultShuttleCache = pylru.lrucache(self.cacheSize)
         self.retransmitCache = pylru.lrucache(self.cacheSize)
@@ -70,6 +63,20 @@ class Replica(process):
         await(self.on == False)
         logger.info("Terminated")
 
+    def incr(tracker, cid):
+        if tracker.get(str(cid), None) is None:
+            tracker[str(cid)] = 1
+        else:
+            tracker[str(cid)] = tracker[str(cid)] + 1
+
+    def get(tracker, cid):
+        return tracker.get(str(cid), 0)
+
+
+    def receive(msg=('wedge_request'), from_=p):
+    	logger.info("Received Wedge Request") 
+    	self.state = 'Immutable' 
+    	send(('wedged_response', self.rid, self.history), to=olympus)
 
 
     def receive(msg=('client_request', opArgs, cid, requestIndex), from_=p):
@@ -96,6 +103,7 @@ class Replica(process):
 
         orderStatement = creatSignedOrderStatement(self.slot_number, opArgs, private_key)
         shuttle.order_proof.append(orderStatement)
+        self.history.append(shuttle.order_proof);
 
         resultStatement = creatSignedResultStatement(opArgs, result, private_key)
         shuttle.result_proof.append(resultStatement)
@@ -261,6 +269,7 @@ class Replica(process):
 
                 orderStatement = creatSignedOrderStatement(self.slot_number, opArgs, private_key)
                 shuttle.order_proof.append(orderStatement)
+                self.history.append(shuttle.order_proof)
 
                 resultStatement = creatSignedResultStatement(opArgs, result, private_key)
                 shuttle.result_proof.append(resultStatement)
@@ -322,6 +331,7 @@ class Replica(process):
 
         orderStatement = creatSignedOrderStatement(self.slot_number, shuttle.opArgs, private_key)
         shuttle.order_proof.append(orderStatement)
+        self.history.append(shuttle.order_proof)
 
         resultStatement = creatSignedResultStatement(shuttle.opArgs, result, private_key)
         shuttle.result_proof.append(resultStatement)

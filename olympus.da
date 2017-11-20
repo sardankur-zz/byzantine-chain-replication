@@ -15,8 +15,10 @@ class Olympus(process):
     def setup(head_timeout: int, nonhead_timeout: int, t: int, failures, host_replica):
     
         self.on = True
+        self.systemState = 'Normal' 
         self.configs = []
         self.default_timeout = 3
+        self.order_proof_history = {}
         logger.info("Setup Completed")
 
 
@@ -35,12 +37,38 @@ class Olympus(process):
     def receive(msg=('reconfigure_client_request', result_proof), from_=p):
         pass
 
+    
+
     def receive(msg=('reconfigure'), from_=p):
         logger.info("Received Reconfigure Request")
+        
+        if self.systemState != 'Reconfiguring': 
+            self.systemState = 'Reconfiguring'
+            self.order_proof_history = {}
 
-        replicas = self.configs[len(self.configs) - 1].replicas
-        send(('wedge_request'), to=replicas)
+            replicas = self.configs[len(self.configs) - 1].replicas
+            
+            clk = logical_clock()
 
+            logger.info("Sending wedge requests to all replicas")
+            for replica in replicas:
+                send(('wedge_request'), to=replica)
+
+            logger.info("Awaiting wedged responses from all replicas")
+
+            if(await(len(self.order_proof_history) == len(replicas))):
+                pass
+            elif timeout(self.default_timeout):    
+                pass
+            
+            logger.info("Received wedged response from %d replicas" % len(self.order_proof_history))              
+
+            self.systemState = 'Normal'
+
+    def receive(msg=('wedged_response', rid, history), from_=p):
+        self.order_proof_history[rid] = history
+
+    
     def reconfigure():
         config = Config()
 
