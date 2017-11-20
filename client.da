@@ -57,7 +57,7 @@ class Client(process):
 
         # iterate over the workload
 
-        logger.info("Executing %d requests" % len(workArgs))
+        logger.info("Executing %d request(s)" % len(workArgs))
 
         for requestIndex in range(len(self.workArgs)):
             logger.info("Sending request for opArgs = %s and requestIndex = %d" % (workArgs[requestIndex], requestIndex))
@@ -72,7 +72,7 @@ class Client(process):
                     logger.info("Response received for opArgs = %s and requestIndex %d" % (workArgs[requestIndex], requestIndex))   
 
             elif timeout(self.client_timeout):
-                logger.info("Retransmiting request for opArgs = %s and requestIndex = %d" % (workArgs[requestIndex], requestIndex))
+                logger.info("Retransmitting request for opArgs = %s and requestIndex = %d" % (workArgs[requestIndex], requestIndex))
                 for replica in self.latest_config.replicas:
                     send(('client_retransmit_request', workArgs[requestIndex], cid, requestIndex), to=replica)
                 if(await(some(received(('client_retransmit_response', result, result_proof, rIndex)), has=rIndex == requestIndex))):

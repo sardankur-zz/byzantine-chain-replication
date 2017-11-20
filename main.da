@@ -121,11 +121,10 @@ def main():
 
 
     # waiting for clients to finish their workload        
-    await(len(setof(p, received(('client_shut',), from_=p))) == len(clients))
+    await(len(setof(p, received(('client_shut',), from_=p))) == len(clients))    
     logger.info("Clients are shut")
 
-
-    send(("shutdown",), to=olympus)
+    send(("olympus_shutdown",), to=olympus)
 
     if await(len(setof(p, received(('olympus_shut', replica_state), from_=p))) == 1):
         replica_states = setof(replica_state, received(('olympus_shut', replica_state), from_=p))
@@ -140,9 +139,11 @@ def main():
         else:
             for i, item in enumerate(replica_states):
                 logger.info("Replica state for rid =%d is = %s"  % (item['rid'], item['dictionary']))
-
+        
+        logger.info("Olympus is shut")
         # check validity for each test case
     elif timeout(test_config['client_timeout']):
-        logger.error("Timeout from olympus")
-
-    logger.info("Olympus is shut")
+        logger.error("Timeout from Olympus")
+        send(("olympus_force_shutdown",), to=olympus)        
+    
+    logger.info("Terminating")

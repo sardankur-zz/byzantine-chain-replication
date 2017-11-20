@@ -1,6 +1,7 @@
 import json
 import nacl.signing
 import time
+import os
 
 get_logger = import_da("app_logging").get_logger
 Replica = import_da("replica").Replica
@@ -23,7 +24,7 @@ class Olympus(process):
     def run():
         logger.info("Running")
         await(self.on == False)        
-        logger.info("Terminated")
+        logger.info("Terminated")    
 
 
     def receive(msg=('latest_configuration_request', cid), from_=p):
@@ -40,8 +41,7 @@ class Olympus(process):
         replicas = self.configs[len(self.configs) - 1].replicas
         send(('wedge_request'), to=replicas)
 
-    def receive(msg=('olympus_run',), from_=p):        
-
+    def reconfigure():
         config = Config()
 
         failure_cases = failures.get(str(0), {})
@@ -67,17 +67,23 @@ class Olympus(process):
         self.configs.append(config)
 
 
-    def receive(msg=("shutdown",), from_=p):
+    def receive(msg=('olympus_run',), from_=p): 
+        reconfigure()
+
+
+    def receive(msg=("olympus_shutdown",), from_=p):
         logger.info("Request for shutdown")
         
         replicas = self.configs[len(self.configs) - 1].replicas
         
         for replica in replicas:
-            send(('shutdown',), to=replica)
+            send(('replica_shutdown',), to=replica)
 
         replica_state = None
 
         if (await(len(setof(p, received(('replica_shut', replica_state), from_=p))) == len(replicas))):
+            logger.info("Replicas are shut")
+            
             replica_states = setof(replica_state, received(('replica_shut', replica_state), from_=p))        
             deserialized_states = []
             for replica_state in replica_states:
@@ -85,13 +91,18 @@ class Olympus(process):
                 deserialized_states.append(replica_state)
             
             send(('olympus_shut', json.dumps(deserialized_states)), to=p)
+
         elif timeout(self.default_timeout):
-            logger.info("Timeout from Replicas")       
-
-            # kill replicas explicitly
-            # for replica in replicas:
-            #     stop(replica)        
-
-
+            logger.info("Timeout from Replicas")
+            for replica in replicas:
+                send(('replica_force_shutdown',), to=replica)             
+            
         self.on = False
+
+
+    def receive(msg=("olympus_force_shutdown",), from_=p):        
+        logger.info("Force Shut")
+        self.on = False
+        logging.shutdown()
+        os._exit(-1)   
 

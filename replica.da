@@ -5,6 +5,7 @@ import nacl.hash
 import nacl.encoding
 import time
 import pylru
+import os
 from utils import *
 
 HASHER = nacl.hash.sha256
@@ -407,7 +408,14 @@ class Replica(process):
 
 
 
-    def receive(msg=('shutdown',), from_=p):
+    def receive(msg=('replica_shutdown',), from_=p):
         logger.info("Request for shutdown")
         send(('replica_shut', str(ReplicaState(self.rid, self.dictionary))), to=p)
         self.on = False
+
+
+    def receive(msg=('replica_force_shutdown',), from_=p):
+        self.on = False
+        logger.info("Force Shut")
+        logging.shutdown()
+        os._exit(-1)        
