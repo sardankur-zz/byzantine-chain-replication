@@ -1,1 +1,4 @@
 *.py
+.idea/
+__pycache__/
+byzantine.log
