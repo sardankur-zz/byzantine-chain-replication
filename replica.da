@@ -27,12 +27,12 @@ logger = get_logger("REPLICA")
 
 class Replica(process):
     
-    def setup(head_timeout: int, nonhead_timeout: int, rid: int, olympus, replicas, private_key, public_keys, failures):
+    def setup(head_timeout: int, nonhead_timeout: int, rid: int, config_id: int, slot_number: int, client_requests, dictionary,
+    		olympus, replicas, private_key, public_keys, failures):
         self.on = True
-        self.state = 'Normal'
-        self.slot_number = -1 # so that number starts from zero
-        self.dictionary = {}
+        self.state = 'Normal'                
         self.cacheSize = 10000
+        self.checkpointing_trigger = 2
 
         self.history = []
 
@@ -45,14 +45,13 @@ class Replica(process):
         self.prevr = replicas[rid - 1] if (rid > 0 ) else None
         self.head  = replicas[0]
 
-        # tracking of message
-        self.client_requests = {}
+        # tracking of message        
         self.client_forward_requests = {}
         self.shuttle_requests = {}
         self.result_shuttle_requests = {}
 
         # set logging
-        formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(name)s " + str(self.rid) + " : %(message)s")
+        formatter = logging.Formatter("%(asctime)s : %(levelname)5s : %(name)6s " + str(self.rid) + " : %(message)s")
         for handler in logger.handlers:            
             handler.setFormatter(formatter)
 
@@ -72,17 +71,30 @@ class Replica(process):
     def get(tracker, cid):
         return tracker.get(str(cid), 0)
 
+    def increamentSlotNumberAndCheckForCheckpointingTrigger():
+    	self.slot_number = self.slot_number + 1;
+    	if( rid == 0 && (slot_number + 1)%self.checkpointing_trigger == 0 ):
+    		logger.info('Checkpointing: Trigger Checkpointing at slot_number = %d' %self.slot_number)
+    		send(('checkpointing_request'), to=head)
 
     def receive(msg=('wedge_request'), from_=p):
-    	logger.info("Received Wedge Request") 
-    	self.state = 'Immutable' 
-    	send(('wedged_response', self.rid, self.history), to=olympus)
+        logger.info("Received Wedge Request") 
+        self.state = 'Immutable' 
+        send(('wedged_response', self.rid, self.history), to=olympus)
+
+    def receive(msg=('catch_up'), from_=p):
+        logger.info("Received Catch_Up Request") 
+        send(('caught_up', rid, 0), to=olympus)  ####Need to do this  
+
+    def receive(msg=('get_running_state'), from_=p):
+        logger.info("Received Get_Running_State Request") 
+        send(('running_state', self.slot_number, self.client_requests, self.dictionary), to=olympus)
 
 
     def receive(msg=('client_request', opArgs, cid, requestIndex), from_=p):
         logger.info("Client request from cid = %d requestId = %d received with op args %s" % (cid, requestIndex, opArgs))
-
-        self.slot_number = self.slot_number + 1;
+    
+        increamentSlotNumberAndCheckForCheckpointingTrigger()
 
         # change opArgs if failure case demands
         failure = Failure.get_failure(failures, 'client_request', self.get(self.client_requests, cid), cid, 'change_operation')
@@ -149,10 +161,10 @@ class Replica(process):
                     send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=p)
                 else:
                     logger.error('Reconfigure: client_retransmit_request empty cache on confiramtion receipt cid = %d and requestIndex = %d' % (cid, requestIndex))
-                    send(('reconfigure'), to=olympus)
+                    send(('reconfigure', config_id), to=olympus)
             elif timeout(nonhead_timeout):
                 logger.error('Reconfigure: Client_request_forward timeout cid = %d and requestIndex = %d' % (cid, requestIndex))
-                send(('reconfigure'), to=olympus)
+                send(('reconfigure', config_id), to=olympus)
                 
    
 
@@ -241,14 +253,14 @@ class Replica(process):
 
                 elif timeout(head_timeout):
                     logger.error("Reconfigure: head timed out waiting for result shuttle for the operation in queue for cid = %d and requestIndex = %d" % (cid, requestIndex))
-                    send(('reconfigure'), to=olympus)
+                    send(('reconfigure', config_id), to=olympus)
             
             # unrecognized operation
             else:
                
                 logger.info("Creating shuttle for unrecognized retransmit request from cid = %d and requestIndex = %d" % (cid, requestIndex))
                 
-                self.slot_number = self.slot_number + 1;
+                increamentSlotNumberAndCheckForCheckpointingTrigger();
 
                 # change opArgs if failure case demands
                 failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_forward_requests, cid), cid, 'change_operation')
@@ -300,7 +312,7 @@ class Replica(process):
 
                 elif timeout(head_timeout):
                     logger.error("Reconfigure: head timeout waiting for result_shuttle on newly created request cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
-                    send(('reconfigure'), to=olympus)
+                    send(('reconfigure', config_id), to=olympus)
 
 
     def receive(msg=('shuttle', shuttle), from_=p):
@@ -308,7 +320,7 @@ class Replica(process):
 
         if not isOrderProofValid(shuttle.slot_number, shuttle.opArgs, shuttle.order_proof, self.public_keys):
             logger.error("Reconfigure: Order Proof is not valid cid = %d requestIndex = %d slot_number = %d" % (shuttle.cid, shuttle.requestIndex, shuttle.slot_number))
-            send(('reconfigure'), to=olympus)
+            send(('reconfigure', config_id), to=olympus)
             return
          
         # change opArgs if failure case demands
@@ -353,7 +365,7 @@ class Replica(process):
 
             if not isvalidResultProof(shuttle.opArgs, resultShuttle.result, resultShuttle.result_proof, self.public_keys):
                 logger.error("Reconfigure: Result Proof is not valid for cid = %d requestIndex = %d" % (resultShuttle.cid, resultShuttle.requestIndex))
-                send(('reconfigure'), to=olympus)
+                send(('reconfigure', config_id), to=olympus)
                 return
 
             #store in the cache
@@ -390,7 +402,7 @@ class Replica(process):
         
         if not isvalidResultProof(resultShuttle.opArgs, resultShuttle.result, resultShuttle.result_proof, self.public_keys):
             logger.error("Reconfigure: Result Proof is not valid for cid = %d requestIndex = %d" % (resultShuttle.cid, resultShuttle.requestIndex))
-            send(('reconfigure'), to=olympus)
+            send(('reconfigure', config_id), to=olympus)
             return
 
         #cache the result shuttle
@@ -418,13 +430,13 @@ class Replica(process):
 
 
 
-    def receive(msg=('replica_shutdown',), from_=p):
+    def receive(msg=('replica_shutdown'), from_=p):
         logger.info("Request for shutdown")
         send(('replica_shut', str(ReplicaState(self.rid, self.dictionary))), to=p)
         self.on = False
 
 
-    def receive(msg=('replica_force_shutdown',), from_=p):
+    def receive(msg=('replica_force_shutdown'), from_=p):
         self.on = False
         logger.info("Force Shut")
         logging.shutdown()

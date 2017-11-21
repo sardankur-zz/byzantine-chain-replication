@@ -24,7 +24,7 @@ class Client(process):
         self.requestIndex = 0
         self.main_thread = None
 
-        formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(name)s " + str(self.cid) + " : %(message)s")
+        formatter = logging.Formatter("%(asctime)s : %(levelname)5s : %(name)6s  " + str(self.cid) + " : %(message)s")
         for handler in logger.handlers:            
             handler.setFormatter(formatter)
 
@@ -33,7 +33,7 @@ class Client(process):
     def run():
         logger.info("Running")
         await(self.on == False)
-        send(('client_shut',), to=self.main_thread)
+        send(('client_shut'), to=self.main_thread)
         logger.info("Terminated")
 
 
@@ -64,7 +64,7 @@ class Client(process):
             
             if not isvalidResultProof(workArgs[requestIndex], result, result_proof, config.public_keys):
                 logger.error("Reconfigure: Result Proof is not valid for rIndex = %d" % rIndex)
-                send(('reconfigure_client_request', result_proof), to=olympus)                                
+                send(('reconfigure_client_request', result_proof, result), to=olympus)                                
                 return 'Reconfigure'
             
             else:
@@ -83,7 +83,7 @@ class Client(process):
             if(await(some(received(('client_retransmit_response', result, result_proof, rIndex)), has=rIndex == requestIndex))):
                 if not isvalidResultProof(workArgs[requestIndex], result, result_proof, config.public_keys):
                     logger.error("Reconfigure: Result Proof is not valid for rIndex = %d" % rIndex)
-                    send(('reconfigure_client_request', result_proof), to=olympus)
+                    send(('reconfigure_client_request', result_proof, result), to=olympus)
                     return 'Reconfigure'
                 else :
                     logger.info("Retransmit response received for opArgs = %s and requestIndex %d" \
@@ -92,7 +92,7 @@ class Client(process):
                 
             elif timeout(self.client_timeout):
                 logger.error("Reconfigure: Client_Retransmit_request timed out: Request number : %d " % requestIndex)
-                send(('reconfigure_client_request', result_proof), to=olympus)
+                send(('reconfigure_client_request', None, None), to=olympus)
                 return 'Reconfigure'
 
 
@@ -117,8 +117,9 @@ class Client(process):
                 logger.info("Attempting to get Latest Configuration")
 
                 # config should also specify the request number executed for each client
-                config = get_latest_configuration()        
+                config = get_latest_configuration()                        
                 if config is not None:
+                    logger.info("Latest configuration received")
                     break                    
                 time.sleep(3)        
 

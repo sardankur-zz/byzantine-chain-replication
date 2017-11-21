@@ -21,6 +21,9 @@ Config = common.Config
 ReplicaState = common.ReplicaState
 
 logger = get_logger("UTIL")
+formatter = logging.Formatter("%(asctime)s : %(levelname)5s : %(name)9s : %(message)s")
+for handler in logger.handlers:            
+    handler.setFormatter(formatter)
 
 def creatSignedOrderStatement(slot_number, opArgs, private_key_param):
     orderStatement = str(slot_number) + str(opArgs)

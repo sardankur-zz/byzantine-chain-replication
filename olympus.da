@@ -2,6 +2,9 @@ import json
 import nacl.signing
 import time
 import os
+from utils import *
+import copy
+import itertools
 
 get_logger = import_da("app_logging").get_logger
 Replica = import_da("replica").Replica
@@ -18,8 +21,15 @@ class Olympus(process):
         self.systemState = 'Normal' 
         self.wait_T = 0.5
         self.configs = []
+        self.latest_config = None
         self.default_timeout = 3
         self.order_proof_history = {}
+        self.caught_up_state_hash = {}
+
+        formatter = logging.Formatter("%(asctime)s : %(levelname)5s : %(name)9s : %(message)s")
+        for handler in logger.handlers:            
+            handler.setFormatter(formatter)
+
         logger.info("Setup Completed")
 
 
@@ -35,50 +45,148 @@ class Olympus(process):
         if (self.systemState == 'Reconfiguring'):            
             send(('latest_configuration_response', None), to=p)
         else:
-            send(('latest_configuration_response', self.configs[len(self.configs) - 1]), to=p)
+            send(('latest_configuration_response', self.latest_config), to=p)
 
-    def receive(msg=('reconfigure_client_request', result_proof), from_=p):
-        pass
 
-    
+    def receive(msg=('reconfigure_client_request', result_proof, result), from_=p):
+        logger.info("Received Reconfigure Request from client")
+        if(result_proof is None or 
+          not isvalidResultProof(result_proof[0].operation, result, result_proof, self.latest_config.public_keys)):
+            logger.info("Forwarding client request with valid proof of misbehavior for Reconfiguration")
+            send(('reconfigure', self.latest_config.config_id), to=self)
 
-    def receive(msg=('reconfigure'), from_=p):
-        logger.info("Received Reconfigure Request")
+
+    def receive(msg=('reconfigure', config_id), from_=p):
+        logger.info("Reconfigure: Received Reconfigure Request")
         
-        if self.systemState != 'Reconfiguring': 
-            self.systemState = 'Reconfiguring'
-            self.order_proof_history = {}
+        # Don't entertain repeated requests before reconfiguration is done 
+        if config_id < self.latest_config.config_id or (config_id == self.latest_config.config_id and self.systemState == 'Reconfiguring'):            
+            logger.info("Reconfigure: Duplicate Reconfigure Request")
+            return
 
-            replicas = self.configs[len(self.configs) - 1].replicas
-            
+        self.systemState = 'Reconfiguring'
+
+        self.order_proof_history = {}        
+        replicas = self.latest_config.replicas
+        
+        logger.info("Reconfigure: Sending wedge requests to all replicas")
+        for replica in replicas:
+            send(('wedge_request'), to=replica)
+
+        logger.info("Reconfigure: Awaiting wedged responses from all replicas")
+
+        if(await(len(self.order_proof_history) == len(replicas))):
+            pass
+        elif timeout(self.wait_T):    
+            pass
+        
+        logger.info("Reconfigure: Received wedged response from %d replicas" % len(self.order_proof_history))              
+        
+        valid_history = copy.copy(self.order_proof_history)
+        filter_invalid_order_proof_history(valid_history)
+        
+        logger.info("Quorum: Attempting Quorum on valid history") 
+        Q_list = list(itertools.combinations(list(valid_history.keys()), self.t+1))
+
+        for quorum in Q_list:
+            hist = []
+            for rid in quorum:
+                hist.append(valid_history)
+
+            if not isValidQuorum(hist):
+                logger.info("Quorum: not a valid quorum %s" % quorum)
+                continue
+
+            self.caught_up_state_hash = {}
+            for rid in quorum:                
+                send(('catch_up'), to=replicas[rid])
+
+            if(await(len(self.caught_up_state_hash) == len(quorum))):                
+                pass
+            elif timeout(self.default_timeout):    
+                continue
+
+            if not isValidCaughtUpStateHash():
+                logger.info("Quorum: Caught Up State is not valid")
+                continue
+
+            logger.info("Quorum: Get running state")
+
             clk = logical_clock()
+            longest_history_replica = quorum[0]
 
-            logger.info("Sending wedge requests to all replicas")
+            send(('get_running_state'), to= replicas[longest_history_replica])                        
+            await(some(received(('running_state', slot_number, client_requests, running_state), clk=rclk), has= (rclk > clk)))            
+            logger.info("Quorum: Running state recevied %s" % running_state)
+
+            if(not isRunningStateValid(running_state, self.caught_up_state_hash[longest_history_replica])):
+                logger.info("Quorum: Quorum:State hash is not consistent with Running state")
+                continue
+
             for replica in replicas:
-                send(('wedge_request'), to=replica)
+                send(('replica_force_shutdown'), to=replica)
 
-            logger.info("Awaiting wedged responses from all replicas")
+            configure(slot_number, client_requests, running_state)    
+            break
+                    
+        self.systemState = 'Normal'
 
-            if(await(len(self.order_proof_history) == len(replicas))):
-                pass
-            elif timeout(self.wait_T):    
-                pass
-            
-            logger.info("Received wedged response from %d replicas" % len(self.order_proof_history))              
-
-            self.systemState = 'Normal'
 
     def receive(msg=('wedged_response', rid, history), from_=p):
         self.order_proof_history[rid] = history
 
-    
-    def reconfigure():
-        config = Config()
+    def receive(msg=('caught_up', rid, state_hash), from_=p):
+        self.caught_up_state_hash[rid] = state_hash
 
-        failure_cases = failures.get(str(0), {})
+    def filter_invalid_order_proof_history(histories):
+        for rid in histories:
+            history = histories[rid]
+            for order_proof in history:
+                if not isOrderProofValid(order_proof[0].slot_number, order_proof[0].operation, order_proof, self.configs[len(self.configs) - 1].public_keys):
+                    logger.info('Removing rid = %d from quorum selection for having invalid order proof history' %rid)
+                    del histories[rid]
+                    break
+
+    def isPrefix(prefix, proof):
+        for i in range(len(prefix)):
+            if(prefix[i] != proof[i]):
+                return False
+        return True        
+
+    def isValidQuorum(hist):
+        n = len(hist)
+        m = len(hist[n-1])
+        for i in range(m):
+            longest_proof = hist[n-1][i]     
+            for j in range(n-1):
+                if not isPrefix(hist[j][i], longest_proof):
+                    return False
+        return True            
+
+    def isValidCaughtUpStateHash():
+        rid_init = None
+        for rid in self.caught_up_state_hash:
+            if rid_init is None:
+                rid_init = rid
+                continue
+
+            if self.caught_up_state_hash[rid] != self.caught_up_state_hash[rid_init]:
+                return False
+        return True
+
+    def isRunningStateValid(running_state, hash):
+        return True
+
+
+    def configure(slot_number = -1, client_requests = {}, dictionary = {}):        
+
+        logger.info("CONFIG : Creating new CONFIGURATION = %d", len(self.configs))        
+
+        config = Config()        
         
         # initializing replicas
         config.replicas = []
+        config.config_id = len(self.configs)
         for i in range(2*t + 1):
             replica = new(Replica, num=1, at=host_replica.get(str(i), "default"))                                    
             signingKey = nacl.signing.SigningKey.generate()                                
@@ -87,28 +195,30 @@ class Olympus(process):
             config.replicas.append(replica)        
         
         config.head = config.replicas[0]
-        config.tail = config.replicas[len(config.replicas) - 1]                
+        config.tail = config.replicas[len(config.replicas) - 1]                        
 
-        time.sleep(0.2)
-
+        failure_cases = failures.get(str(config.config_id), {})
+        logger.info("CONFIG : Creating replicas for configuration = %d" % config.config_id)
         for i in range(2*t + 1):
-            setup(config.replicas[i], (head_timeout, nonhead_timeout, i, self, config.replicas, config.private_keys[i], config.public_keys, failure_cases.get(str(i), [])))                        
+            setup(config.replicas[i], (head_timeout, nonhead_timeout, i, config.config_id, slot_number, client_requests, dictionary,
+                self, config.replicas, config.private_keys[i], config.public_keys, failure_cases.get(str(i), [])))                        
             start(config.replicas[i])                
 
         self.configs.append(config)
+        self.latest_config = config
 
 
     def receive(msg=('olympus_run',), from_=p): 
-        reconfigure()
+        configure()
 
 
     def receive(msg=("olympus_shutdown",), from_=p):
         logger.info("Request for shutdown")
         
-        replicas = self.configs[len(self.configs) - 1].replicas
+        replicas = self.latest_config.replicas
         
         for replica in replicas:
-            send(('replica_shutdown',), to=replica)
+            send(('replica_shutdown'), to=replica)
 
         replica_state = None
 
@@ -124,14 +234,14 @@ class Olympus(process):
             send(('olympus_shut', json.dumps(deserialized_states)), to=p)
 
         elif timeout(self.default_timeout):
-            logger.info("Timeout from Replicas")
+            logger.info("Timeout for Replicas shutdown")
             for replica in replicas:
-                send(('replica_force_shutdown',), to=replica)             
+                send(('replica_force_shutdown'), to=replica)             
             
         self.on = False
 
 
-    def receive(msg=("olympus_force_shutdown",), from_=p):        
+    def receive(msg=("olympus_force_shutdown"), from_=p):        
         logger.info("Force Shut")
         self.on = False
         logging.shutdown()

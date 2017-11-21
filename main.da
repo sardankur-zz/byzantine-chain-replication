@@ -2,6 +2,7 @@ import sys
 import time
 import re
 import json
+import logging
 
 common = import_da("common")
 Operation = common.Operation
@@ -11,6 +12,9 @@ Client = import_da("client").Client
 
 
 logger = get_logger("MAIN")
+formatter = logging.Formatter("%(asctime)s : %(levelname)5s : %(name)9s : %(message)s")
+for handler in logger.handlers:
+    handler.setFormatter(formatter)
 
 def read_configuration(filename):    
     test_config = {}
@@ -143,7 +147,7 @@ def main():
         logger.info("Olympus is shut")
         # check validity for each test case
     elif timeout(test_config['client_timeout']):
-        logger.error("Timeout from Olympus")
+        logger.error("Timeout for Olympus shutdown")
         send(("olympus_force_shutdown",), to=olympus)        
     
     logger.info("Terminating")
