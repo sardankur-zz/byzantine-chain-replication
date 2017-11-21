@@ -28,7 +28,7 @@ logger = get_logger("REPLICA")
 class Replica(process):
     
     def setup(head_timeout: int, nonhead_timeout: int, rid: int, config_id: int, slot_number: int, client_requests, dictionary,
-    		olympus, replicas, private_key, public_keys, failures):
+            olympus, replicas, private_key, public_keys, failures):
         self.on = True
         self.state = 'Normal'                
         self.cacheSize = 10000
@@ -72,10 +72,10 @@ class Replica(process):
         return tracker.get(str(cid), 0)
 
     def increamentSlotNumberAndCheckForCheckpointingTrigger():
-    	self.slot_number = self.slot_number + 1;
-    	if( rid == 0 && (slot_number + 1)%self.checkpointing_trigger == 0 ):
-    		logger.info('Checkpointing: Trigger Checkpointing at slot_number = %d' %self.slot_number)
-    		send(('checkpointing_request'), to=head)
+        self.slot_number = self.slot_number + 1;
+        if( rid == 0 and ((self.slot_number + 1)%self.checkpointing_trigger) == 0 ):
+            logger.info('CHECKPTNG: Trigger Checkpointing at slot_number = %d' %self.slot_number)
+            send(('checkpointing_request'), to=head)
 
     def receive(msg=('wedge_request'), from_=p):
         logger.info("Received Wedge Request") 

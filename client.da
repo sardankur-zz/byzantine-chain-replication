@@ -103,7 +103,7 @@ class Client(process):
                     % (self.workArgs[rIndex], rIndex)) 
 
 
-    def receive(msg=('client_run',), from_=p):
+    def receive(msg=('client_run'), from_=p):
 
         self.main_thread = p            
         config = None

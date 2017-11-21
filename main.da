@@ -94,7 +94,7 @@ def main():
         num=1, at=host.get("olympus", "default"))
     start(olympus)    
     
-    send(('olympus_run',), to=olympus)    
+    send(('olympus_run'), to=olympus)    
 
     time.sleep(0.2)
 
@@ -121,14 +121,14 @@ def main():
 
     logger.info("Running Test Case : %s" % test_config.get('test_case_name', ''))
     for client in clients:
-        send(('client_run',), to=client)
+        send(('client_run'), to=client)
 
 
     # waiting for clients to finish their workload        
-    await(len(setof(p, received(('client_shut',), from_=p))) == len(clients))    
+    await(len(setof(p, received(('client_shut'), from_=p))) == len(clients))    
     logger.info("Clients are shut")
 
-    send(("olympus_shutdown",), to=olympus)
+    send(("olympus_shutdown"), to=olympus)
 
     if await(len(setof(p, received(('olympus_shut', replica_state), from_=p))) == 1):
         replica_states = setof(replica_state, received(('olympus_shut', replica_state), from_=p))
@@ -148,6 +148,6 @@ def main():
         # check validity for each test case
     elif timeout(test_config['client_timeout']):
         logger.error("Timeout for Olympus shutdown")
-        send(("olympus_force_shutdown",), to=olympus)        
+        send(("olympus_force_shutdown"), to=olympus)        
     
     logger.info("Terminating")

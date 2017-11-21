@@ -208,11 +208,11 @@ class Olympus(process):
         self.latest_config = config
 
 
-    def receive(msg=('olympus_run',), from_=p): 
+    def receive(msg=('olympus_run'), from_=p): 
         configure()
 
 
-    def receive(msg=("olympus_shutdown",), from_=p):
+    def receive(msg=("olympus_shutdown"), from_=p):
         logger.info("Request for shutdown")
         
         replicas = self.latest_config.replicas
