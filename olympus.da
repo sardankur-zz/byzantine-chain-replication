@@ -16,6 +16,7 @@ class Olympus(process):
     
         self.on = True
         self.systemState = 'Normal' 
+        self.wait_T = 0.5
         self.configs = []
         self.default_timeout = 3
         self.order_proof_history = {}
@@ -60,7 +61,7 @@ class Olympus(process):
 
             if(await(len(self.order_proof_history) == len(replicas))):
                 pass
-            elif timeout(self.default_timeout):    
+            elif timeout(self.wait_T):    
                 pass
             
             logger.info("Received wedged response from %d replicas" % len(self.order_proof_history))              

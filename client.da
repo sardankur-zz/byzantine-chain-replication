@@ -50,7 +50,7 @@ class Client(process):
         clk = logical_clock()
         send(('latest_configuration_request', cid), to=olympus)
         await(some(received(('latest_configuration_response', config), clk=rclk), has=rclk > clk))
-        return config
+        return config    
 
 
     def execute_request(requestIndex, config):       
@@ -64,7 +64,7 @@ class Client(process):
             
             if not isvalidResultProof(workArgs[requestIndex], result, result_proof, config.public_keys):
                 logger.error("Reconfigure: Result Proof is not valid for rIndex = %d" % rIndex)
-                send(('reconfigure_client_request', result_proof), to=olympus)
+                send(('reconfigure_client_request', result_proof), to=olympus)                                
                 return 'Reconfigure'
             
             else:
@@ -96,6 +96,13 @@ class Client(process):
                 return 'Reconfigure'
 
 
+    def receive(msg=('olympus_client_response', result, result_proof, rIndex), from_=p):
+
+        # Getting response from Olympus
+        logger.info("Response received from Olympus for opArgs = %s and requestIndex %d" \
+                    % (self.workArgs[rIndex], rIndex)) 
+
+
     def receive(msg=('client_run',), from_=p):
 
         self.main_thread = p            
@@ -108,6 +115,8 @@ class Client(process):
 
             while config is None:                                
                 logger.info("Attempting to get Latest Configuration")
+
+                # config should also specify the request number executed for each client
                 config = get_latest_configuration()        
                 if config is not None:
                     break                    
@@ -115,10 +124,10 @@ class Client(process):
 
             return_value = execute_request(requestIndex, config)
 
-            if return_value == 'Success':
-                requestIndex += 1
-            elif return_value == 'Reconfigure':                
+            if return_value == 'Reconfigure':
                 config = None
+
+            requestIndex += 1
 
         self.on = False
 
