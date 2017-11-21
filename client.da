@@ -4,6 +4,7 @@ import logging
 import nacl.signing
 import nacl.hash
 import nacl.encoding
+import time
 from utils import *
 
 HASHER = nacl.hash.sha256
@@ -44,44 +45,80 @@ class Client(process):
                 self.workArgs.append(OpArgs(work[0], work[1], work[2]))
         send(('client_workload_ack', cid), to=p)
 
-
-    def receive(msg=('client_run',), from_=p):
-
-        self.main_thread = p
-
-        # get the permanent configuration (phase 2 limitation)
+    
+    def get_latest_configuration():
         clk = logical_clock()
         send(('latest_configuration_request', cid), to=olympus)
         await(some(received(('latest_configuration_response', config), clk=rclk), has=rclk > clk))
-        self.latest_config = config
+        return config
 
-        # iterate over the workload
 
-        logger.info("Executing %d request(s)" % len(workArgs))
+    def execute_request(requestIndex, config):       
+        
+        # send client request
+        logger.info("Sending request for opArgs = %s and requestIndex = %d" \
+            % (workArgs[requestIndex], requestIndex))        
+        send(('client_request', workArgs[requestIndex], cid, requestIndex), to=config.head)
 
-        for requestIndex in range(len(self.workArgs)):
-            logger.info("Sending request for opArgs = %s and requestIndex = %d" % (workArgs[requestIndex], requestIndex))
-            send(('client_request', workArgs[requestIndex], cid, requestIndex), to=self.latest_config.head)
+        if(await(some(received(('client_response', result, result_proof, rIndex)), has= rIndex==requestIndex))):
+            
+            if not isvalidResultProof(workArgs[requestIndex], result, result_proof, config.public_keys):
+                logger.error("Reconfigure: Result Proof is not valid for rIndex = %d" % rIndex)
+                send(('reconfigure_client_request', result_proof), to=olympus)
+                return 'Reconfigure'
+            
+            else:
+                logger.info("Response received for opArgs = %s and requestIndex %d" \
+                    % (workArgs[requestIndex], requestIndex))   
+                return 'Success'
 
-            if(await(some(received(('client_response', result, result_proof, rIndex)), has= rIndex==requestIndex))):
+        elif timeout(self.client_timeout):
+            
+            logger.info("Retransmitting request for opArgs = %s and requestIndex = %d" \
+                % (workArgs[requestIndex], requestIndex))
+            for replica in config.replicas:
+                send(('client_retransmit_request', workArgs[requestIndex], cid, requestIndex), to=replica)
+
+
+            if(await(some(received(('client_retransmit_response', result, result_proof, rIndex)), has=rIndex == requestIndex))):
                 if not isvalidResultProof(workArgs[requestIndex], result, result_proof, config.public_keys):
                     logger.error("Reconfigure: Result Proof is not valid for rIndex = %d" % rIndex)
                     send(('reconfigure_client_request', result_proof), to=olympus)
-                    break                    
-                else:
-                    logger.info("Response received for opArgs = %s and requestIndex %d" % (workArgs[requestIndex], requestIndex))   
-
+                    return 'Reconfigure'
+                else :
+                    logger.info("Retransmit response received for opArgs = %s and requestIndex %d" \
+                        % (workArgs[requestIndex], requestIndex))
+                    return 'Success'
+                
             elif timeout(self.client_timeout):
-                logger.info("Retransmitting request for opArgs = %s and requestIndex = %d" % (workArgs[requestIndex], requestIndex))
-                for replica in self.latest_config.replicas:
-                    send(('client_retransmit_request', workArgs[requestIndex], cid, requestIndex), to=replica)
-                if(await(some(received(('client_retransmit_response', result, result_proof, rIndex)), has=rIndex == requestIndex))):
-                    logger.info("Retransmit response received for opArgs = %s and requestIndex %d" % (workArgs[requestIndex], requestIndex))
-                    #missing validation
-                elif timeout(self.client_timeout):
-                    logger.error("Reconfigure: Client_Retransmit_request timed out: Request number : %d " % requestIndex)
-                    send(('reconfigure_client_request', result_proof), to=olympus)
-                    break
+                logger.error("Reconfigure: Client_Retransmit_request timed out: Request number : %d " % requestIndex)
+                send(('reconfigure_client_request', result_proof), to=olympus)
+                return 'Reconfigure'
+
+
+    def receive(msg=('client_run',), from_=p):
+
+        self.main_thread = p            
+        config = None
+
+        logger.info("Executing %d request(s)    " % len(workArgs))
+
+        requestIndex = 0
+        while (requestIndex < len(self.workArgs)):
+
+            while config is None:                                
+                logger.info("Attempting to get Latest Configuration")
+                config = get_latest_configuration()        
+                if config is not None:
+                    break                    
+                time.sleep(3)        
+
+            return_value = execute_request(requestIndex, config)
+
+            if return_value == 'Success':
+                requestIndex += 1
+            elif return_value == 'Reconfigure':                
+                config = None
 
         self.on = False
 

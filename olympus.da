@@ -30,9 +30,11 @@ class Olympus(process):
 
 
     def receive(msg=('latest_configuration_request', cid), from_=p):
-        logger.info("Request for latest configuration from cid = %d" % cid)
-        send(('latest_configuration_response', self.configs[len(self.configs) - 1]), to=p)
-
+        logger.info("Request for latest configuration from cid = %d" % cid)        
+        if (self.systemState == 'Reconfiguring'):            
+            send(('latest_configuration_response', None), to=p)
+        else:
+            send(('latest_configuration_response', self.configs[len(self.configs) - 1]), to=p)
 
     def receive(msg=('reconfigure_client_request', result_proof), from_=p):
         pass
