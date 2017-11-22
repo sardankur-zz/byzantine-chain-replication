@@ -9,10 +9,9 @@ import os
 from utils import *
 
 HASHER = nacl.hash.sha256
-get_logger = import_da("app_logging").get_logger
+app_logging = import_da("app_logging")
 common = import_da("common")
 Failure = import_da("failure").Failure
-
 
 OpArgs = common.OpArgs
 OrderStatement = common.OrderStatement
@@ -23,7 +22,7 @@ Operation = common.Operation
 Config = common.Config
 ReplicaState = common.ReplicaState
 
-logger = get_logger("REPLICA")
+logger = app_logging.get_logger("REPLICA")
 
 class Replica(process):
     
@@ -45,62 +44,118 @@ class Replica(process):
         self.prevr = replicas[rid - 1] if (rid > 0 ) else None
         self.head  = replicas[0]
 
-        # tracking of message        
-        self.client_forward_requests = {}
-        self.shuttle_requests = {}
-        self.result_shuttle_requests = {}
+        # failure handling
+        self.failure_handler = Failure(failures)        
 
         # set logging
         formatter = logging.Formatter("%(asctime)s : %(levelname)5s : %(name)6s " + str(self.rid) + " : %(message)s")
-        for handler in logger.handlers:            
-            handler.setFormatter(formatter)
+        app_logging.set_formatter(logger, formatter)        
 
         logger.info("Setup Completed")
 
     def run():
         logger.info("Running")
         await(self.on == False)
-        logger.info("Terminated")
-
-    def incr(tracker, cid):
-        if tracker.get(str(cid), None) is None:
-            tracker[str(cid)] = 1
-        else:
-            tracker[str(cid)] = tracker[str(cid)] + 1
-
-    def get(tracker, cid):
-        return tracker.get(str(cid), 0)
+        logger.info("Terminated")    
 
     def increamentSlotNumberAndCheckForCheckpointingTrigger():
         self.slot_number = self.slot_number + 1;
         if( rid == 0 and ((self.slot_number + 1)%self.checkpointing_trigger) == 0 ):
-            logger.info('CHECKPTNG: Trigger Checkpointing at slot_number = %d' %self.slot_number)
+            logger.info('CHECKPTNG: Trigger Check pointing at slot_number = %d' %self.slot_number)
             send(('checkpointing_request'), to=head)
 
+
+    def crashOrSleep(trigger, cid=-1):            
+
+        failure = self.failure_handler.get_failure(trigger, 'crash', cid)
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            app_logging.flush(logger)        
+            os._exit(-1)            
+
+        failure = self.failure_handler.get_failure(trigger, 'sleep', cid)
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            time.sleep(int(failure[3][0]))            
+
+
     def receive(msg=('wedge_request'), from_=p):
-        logger.info("Received Wedge Request") 
+        logger.info("Received Wedge Request")         
+
+        failure = self.failure_handler.get_failure('wedge_request', 'drop')        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            return        
+
+        crashOrSleep('wedge_request')
+
         self.state = 'Immutable' 
         send(('wedged_response', self.rid, self.history), to=olympus)
 
-    def receive(msg=('catch_up'), from_=p):
-        logger.info("Received Catch_Up Request") 
+
+    def receive(msg=('catch_up'), from_=p):        
+        logger.info("Received Catch_Up Request")  
+
+        failure = self.failure_handler.get_failure('catch_up', 'drop')        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            return        
+
+        crashOrSleep('catch_up')
+
         send(('caught_up', rid, 0), to=olympus)  ####Need to do this  
+
+
 
     def receive(msg=('get_running_state'), from_=p):
         logger.info("Received Get_Running_State Request") 
+
+        failure = self.failure_handler.get_failure('get_running_state', 'drop')        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            return        
+
+        crashOrSleep('get_running_state')
+
         send(('running_state', self.slot_number, self.client_requests, self.dictionary), to=olympus)
 
 
+
     def receive(msg=('client_request', opArgs, cid, requestIndex), from_=p):
+    
         logger.info("Client request from cid = %d requestId = %d received with op args %s" % (cid, requestIndex, opArgs))
+
+        # drop, crash or sleep
+        failure = self.failure_handler.get_failure('client_request', 'drop', cid)        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            return        
+
+        crashOrSleep('client_request', cid)
+
+        # increment slot, valid only for head, should be done before actual increment
+        failure = self.failure_handler.get_failure('client_request', 'increment_slot', cid)
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))            
+            self.slot_number += 1
+
+        # Extra operation
+        failure = self.failure_handler.get_failure('client_request', 'extra_op', cid)        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            self.failure_handler.extra_op(self.dictionary);
+
     
         increamentSlotNumberAndCheckForCheckpointingTrigger()
 
-        # change opArgs if failure case demands
-        failure = Failure.get_failure(failures, 'client_request', self.get(self.client_requests, cid), cid, 'change_operation')
-        if(len(failure) > 0):
-            opArgs = Failure.change_operation()
+        # change opArgs if failure case demands        
+        failure = self.failure_handler.get_failure('client_request', 'change_operation', cid)        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            opArgs = self.failure_handler.change_operation()
         
+
+
         # store received operations in the cache
         requestCache[(cid, requestIndex)] = opArgs
 
@@ -108,27 +163,41 @@ class Replica(process):
 
         result = Operation.do_op(dictionary, opArgs)
 
-        # change result if applicable
-        failure = Failure.get_failure(failures, 'client_request', self.get(self.client_requests, cid), cid, 'change_result')
-        if (len(failure) > 0):
-            result = Failure.change_result()
+        # change result if applicable        
+        failure = self.failure_handler.get_failure('client_request', 'change_result', cid)        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            result = self.failure_handler.change_result()
+
+
 
         orderStatement = creatSignedOrderStatement(self.slot_number, opArgs, private_key)
+
+        # change order signature
+        failure = self.failure_handler.get_failure('client_request', 'invalid_order_sig', cid)        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))        
+            self.failure_handler.invalidate_signature(orderStatement)
+
         shuttle.order_proof.append(orderStatement)
         self.history.append(shuttle.order_proof);
 
-        resultStatement = creatSignedResultStatement(opArgs, result, private_key)
-        shuttle.result_proof.append(resultStatement)
 
-        # change opArgs if failure case demands
-        failure = Failure.get_failure(failures, 'client_request', self.get(self.client_requests, cid), cid, 'drop_result_stmt')
-        if (len(failure) > 0):
-            shuttle.result_proof[0] = None
+        resultStatement = creatSignedResultStatement(opArgs, result, private_key)
+
+        # change result signature
+        failure = self.failure_handler.get_failure('client_request', 'invalid_result_sig', cid)        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            self.failure_handler.invalidate_signature(resultStatement)
+
+        shuttle.result_proof.append(resultStatement)        
 
         logger.info("Shuttle Started\t\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(shuttle.cid, shuttle.requestIndex, shuttle.slot_number))
         send(('shuttle', shuttle), to=nextr)
 
-        self.incr(self.client_requests, cid)
+        # increment trackers
+        self.failure_handler.incr('client_request', cid)
 
 
     def receive(msg=('client_retransmit_request', opArgs, cid, requestIndex), from_=p) :
@@ -174,44 +243,38 @@ class Replica(process):
         
         logger.info("Received Forwarded request for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
 
+        # drop, crash or sleep
+        failure = self.failure_handler.get_failure('forwarded_request', 'drop', cid)
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            return
+
+        crashOrSleep('forwarded_request', cid)
+
+
         #if this is first forwarded request received at the head
         if retransmitCache.get((cid, requestIndex), None) is None:
             retransmitCache[(cid, requestIndex)] = 'inProcess'
             
             logger.info("Processing Forwarded request for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
 
-            # change result cache for un-recognized op
-            failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_forward_requests, cid),
-                                          cid, 'remove_from_cache')
-            if (len(failure) > 0):
-                if (cid, requestIndex) in resultShuttleCache.keys():
-                    resultShuttleCache.pop((cid, requestIndex))
-                if (cid, requestIndex) in requestCache.keys():
-                    requestCache.pop((cid, requestIndex))
-
             # send from result cache if available 
             resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
             if resultShuttle is not None:
 
-                # change result if applicable
-                failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_forward_requests, cid), cid,
-                                              'change_result')
-                if (len(failure) > 0):
-                    resultShuttle.result = Failure.change_result()
-
-                    # change result if applicable
-                    failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_forward_requests, cid),
-                                                  cid,
-                                                  'change_result')
-                    if (len(failure) > 0):
-                        resultShuttle.result = Failure.change_result()
+                # change result if applicable                
+                failure = self.failure_handler.get_failure('forwarded_request', 'change_result', cid)        
+                if failure is not None:
+                    logger.info(self.failure_handler.print(failure))
+                    resultShuttle.result = self.failure_handler.change_result()                
 
 
-                    # change opArgs if failure case demands
-                    failure = Failure.get_failure(failures, 'forwarded_request',
-                                                  self.get(self.client_requests, cid), cid, 'drop_result_stmt')
-                    if (len(failure) > 0):
-                        resultShuttle.result_proof[0] = None
+                # change opArgs if failure case demands
+                failure = self.failure_handler.get_failure('forwarded_request', 'drop_result_stmt', resultShuttle.cid)        
+                if failure is not None:
+                    logger.info(self.failure_handler.print(failure))
+                    resultShuttle.result_proof[0] = None                             
+
 
                 logger.info("Replying to retransmit request from cid = %d and requestIndex = %d from resultCache" % (cid, requestIndex))
                 send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)
@@ -232,17 +295,19 @@ class Replica(process):
 
                     resultShuttle = resultShuttleCache.get((cid, requestIndex), None);
 
-                    # change result if applicable
-                    failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_forward_requests, cid),
-                                                  cid, 'change_result')
-                    if (len(failure) > 0):
-                        resultShuttle.result = Failure.change_result()
+                    # change result if applicable                
+                    failure = self.failure_handler.get_failure('forwarded_request', 'change_result', cid)        
+                    if failure is not None:
+                        logger.info(self.failure_handler.print(failure))
+                        resultShuttle.result = self.failure_handler.change_result()                
+
 
                     # change opArgs if failure case demands
-                    failure = Failure.get_failure(failures, 'forwarded_request',
-                                                  self.get(self.client_forward_requests, cid), cid, 'drop_result_stmt')
-                    if (len(failure) > 0):
-                        resultShuttle.result_proof[0] = None
+                    failure = self.failure_handler.get_failure('forwarded_request', 'drop_result_stmt', resultShuttle.cid)        
+                    if failure is not None:
+                        logger.info(self.failure_handler.print(failure))
+                        resultShuttle.result_proof[0] = None             
+
 
                     logger.info("Head responding, waiting for result shuttle for the operation in queue for cid = %d and requestIndex = %d" % (cid, requestIndex))
                     send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)
@@ -260,12 +325,7 @@ class Replica(process):
                
                 logger.info("Creating shuttle for unrecognized retransmit request from cid = %d and requestIndex = %d" % (cid, requestIndex))
                 
-                increamentSlotNumberAndCheckForCheckpointingTrigger();
-
-                # change opArgs if failure case demands
-                failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_forward_requests, cid), cid, 'change_operation')
-                if(len(failure) > 0):
-                    opArgs = Failure.change_operation()
+                increamentSlotNumberAndCheckForCheckpointingTrigger();                
 
                 # store received operations in the cache
                 requestCache[(cid, requestIndex)] = opArgs
@@ -274,27 +334,15 @@ class Replica(process):
 
                 result = Operation.do_op(dictionary, opArgs)
 
-                # change result if applicable
-                failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_forward_requests, cid), cid, 'change_result')
-                if (len(failure) > 0):
-                    result = Failure.change_result()
-
                 orderStatement = creatSignedOrderStatement(self.slot_number, opArgs, private_key)
                 shuttle.order_proof.append(orderStatement)
                 self.history.append(shuttle.order_proof)
 
                 resultStatement = creatSignedResultStatement(opArgs, result, private_key)
-                shuttle.result_proof.append(resultStatement)
-
-                # change opArgs if failure case demands
-                failure = Failure.get_failure(failures, 'forwarded_request', self.get(self.client_forward_requests, cid), cid, 'drop_result_stmt')
-                if (len(failure) > 0):
-                    shuttle.result_proof[0] = None
+                shuttle.result_proof.append(resultStatement)                
 
                 logger.info("Shuttle Started\t\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(shuttle.cid, shuttle.requestIndex,shuttle.slot_number))
-                send(('shuttle', shuttle), to=nextr)
-
-                self.incr(self.client_requests, cid)
+                send(('shuttle', shuttle), to=nextr)                
                  
                 logger.info("Waiting on result_shuttle on newly created request for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
                 if await(some(received(('result_shuttle', resultShuttle)),has = resultShuttle.cid == cid and resultShuttle.requestIndex == requestIndex)):
@@ -314,20 +362,49 @@ class Replica(process):
                     logger.error("Reconfigure: head timeout waiting for result_shuttle on newly created request cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
                     send(('reconfigure', config_id), to=olympus)
 
+        # increment trackers
+        self.failure_handler.incr('forwarded_request', cid)
+
 
     def receive(msg=('shuttle', shuttle), from_=p):
         logger.info("Shuttle Received\t\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(shuttle.cid, shuttle.requestIndex,shuttle.slot_number))
+
+
+        # drop, crash or sleep
+        failure = self.failure_handler.get_failure('shuttle', 'drop', shuttle.cid)
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            return
+
+        crashOrSleep('forwarded_request', shuttle.cid)
+
+        # increment slot, valid only for head, should be done before actual increment
+        failure = self.failure_handler.get_failure('shuttle', 'increment_slot', shuttle.cid)
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            self.slot_number += 1
+
+        # Extra operation
+        failure = self.failure_handler.get_failure('shuttle', 'extra_op', shuttle.cid)        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            failure.extra_op(self.dictionary);
+
+
+
+
 
         if not isOrderProofValid(shuttle.slot_number, shuttle.opArgs, shuttle.order_proof, self.public_keys):
             logger.error("Reconfigure: Order Proof is not valid cid = %d requestIndex = %d slot_number = %d" % (shuttle.cid, shuttle.requestIndex, shuttle.slot_number))
             send(('reconfigure', config_id), to=olympus)
             return
          
-        # change opArgs if failure case demands
-        failure = Failure.get_failure(failures, 'shuttle', self.get(self.shuttle_requests, shuttle.cid), shuttle.cid,
-                                      'change_operation')
-        if (len(failure) > 0):
-            shuttle.opArgs = Failure.change_operation()
+
+        # change opArgs if failure case demands        
+        failure = self.failure_handler.get_failure('shuttle', 'change_operation', shuttle.cid)        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            shuttle.opArgs = self.failure_handler.change_operation()        
          
         # store received operations in the cache
         requestCache[(shuttle.cid, shuttle.requestIndex)] = shuttle.opArgs
@@ -335,24 +412,34 @@ class Replica(process):
         self.slot_number = self.slot_number + 1;
         result = Operation.do_op(dictionary, shuttle.opArgs)
 
-        # change result if applicable
-        failure = Failure.get_failure(failures, 'shuttle', self.get(self.shuttle_requests, shuttle.cid), shuttle.cid,
-                                      'change_result')
-        if (len(failure) > 0):
-            result = Failure.change_result()
+        # change result if applicable        
+        failure = self.failure_handler.get_failure('shuttle', 'change_result', shuttle.cid)        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            result = self.failure_handler.change_result()
+        
 
         orderStatement = creatSignedOrderStatement(self.slot_number, shuttle.opArgs, private_key)
+
+        # change order signature
+        failure = self.failure_handler.get_failure('shuttle', 'invalid_order_sig', shuttle.cid)        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            self.failure_handler.invalidate_signature(orderStatement)
+
         shuttle.order_proof.append(orderStatement)
         self.history.append(shuttle.order_proof)
 
         resultStatement = creatSignedResultStatement(shuttle.opArgs, result, private_key)
-        shuttle.result_proof.append(resultStatement)
 
-        # change opArgs if failure case demands
-        failure = Failure.get_failure(failures, 'shuttle', self.get(self.shuttle_requests, shuttle.cid), shuttle.cid,
-                                      'drop_result_stmt')
-        if (len(failure) > 0):
-            shuttle.result_proof[0] = None
+        # change result signature
+        failure = self.failure_handler.get_failure('shuttle', 'invalid_result_sig', shuttle.cid)        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            self.failure_handler.invalidate_signature(resultStatement)
+
+        shuttle.result_proof.append(resultStatement)        
+        
 
         if (nextr):
             logger.info("Shuttle Forwarded\t\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(shuttle.cid, shuttle.requestIndex,shuttle.slot_number))
@@ -371,34 +458,43 @@ class Replica(process):
             #store in the cache
             resultShuttleCache[(resultShuttle.cid, resultShuttle.requestIndex)] = resultShuttle
 
-
-            failure = Failure.get_failure(failures, 'result_shuttle',
-                                          self.get(self.result_shuttle_requests, resultShuttle.cid), resultShuttle.cid,
-                                          'change_result')
-            if (len(failure) > 0):
-                resultShuttle.result = Failure.change_result()
+            failure = self.failure_handler.get_failure('result_shuttle', 'change_result', resultShuttle.cid)        
+            if failure is not None:
+                logger.info(self.failure_handler.print(failure))
+                resultShuttle.result = self.failure_handler.change_result()            
 
 
-            failure = Failure.get_failure(failures, 'result_shuttle',
-                                          self.get(self.result_shuttle_requests, resultShuttle.cid), resultShuttle.cid,
-                                          'drop_result_stmt')
-            if (len(failure) > 0):
-                resultShuttle.result_proof[0] = None
+            failure = self.failure_handler.get_failure('result_shuttle', 'drop_result_stmt', resultShuttle.cid)        
+            if failure is not None:
+                logger.info(self.failure_handler.print(failure))
+                resultShuttle.result_proof[0] = None            
 
 
             logger.info("Result Shuttle Started\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(resultShuttle.cid, resultShuttle.requestIndex,resultShuttle.slot_number))
 
             send(('result_shuttle', resultShuttle), to=prevr)
 
-            self.incr(self.result_shuttle_requests, resultShuttle.cid)
+            # increment trackers
+            self.failure_handler.incr('result_shuttle', resultShuttle.cid)
+
         
-        self.incr(self.shuttle_requests, shuttle.cid)
+        # increment trackers
+        self.failure_handler.incr('shuttle', shuttle.cid)
 
 
 
 
     def receive(msg=('result_shuttle', resultShuttle), from_=p):
         logger.info("Result Shuttle Received\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(resultShuttle.cid, resultShuttle.requestIndex,resultShuttle.slot_number))
+
+        # drop, crash or sleep
+        failure = self.failure_handler.get_failure('result_shuttle', 'drop', resultShuttle.cid)
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            return
+
+        crashOrSleep('forwarded_request', resultShuttle.cid)
+        
         
         if not isvalidResultProof(resultShuttle.opArgs, resultShuttle.result, resultShuttle.result_proof, self.public_keys):
             logger.error("Reconfigure: Result Proof is not valid for cid = %d requestIndex = %d" % (resultShuttle.cid, resultShuttle.requestIndex))
@@ -408,26 +504,27 @@ class Replica(process):
         #cache the result shuttle
         resultShuttleCache[(resultShuttle.cid, resultShuttle.requestIndex)] = resultShuttle
 
-        failure = Failure.get_failure(failures, 'result_shuttle', self.get(self.result_shuttle_requests,
-                                                   resultShuttle.cid), resultShuttle.cid, 'change_result')
-        if (len(failure) > 0):
-            resultShuttle.result = Failure.change_result()
+        
+        # change result if applicable        
+        failure = self.failure_handler.get_failure('result_shuttle', 'change_result', resultShuttle.cid)        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            resultShuttle.result = self.failure_handler.change_result()        
 
 
-
-        failure = Failure.get_failure(failures, 'result_shuttle',
-                                      self.get(self.result_shuttle_requests, resultShuttle.cid), resultShuttle.cid, 'drop_result_stmt')
-        if (len(failure) > 0):
-            resultShuttle.result_proof[0] = None
+        failure = self.failure_handler.get_failure('result_shuttle', 'drop_result_stmt', resultShuttle.cid)        
+        if failure is not None:
+            logger.info(self.failure_handler.print(failure))
+            resultShuttle.result_proof[0] = None             
 
 
         if (prevr):
             logger.info("Result Shuttle Forwarded\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(resultShuttle.cid, resultShuttle.requestIndex,resultShuttle.slot_number))
 
             send(('result_shuttle', resultShuttle), to=prevr)
-
-        self.incr(self.result_shuttle_requests, resultShuttle.cid)
-
+        
+        # increment trackers
+        self.failure_handler.incr('result_shuttle', resultShuttle.cid)
 
 
     def receive(msg=('replica_shutdown'), from_=p):

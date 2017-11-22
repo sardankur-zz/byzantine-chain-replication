@@ -22,3 +22,11 @@ def get_logger(name):
     logger.addHandler(fh)
 
     return logger
+
+def set_formatter(logger, formatter):
+    for handler in logger.handlers:            
+        handler.setFormatter(formatter)
+
+def flush(logger):
+    for handler in logger.handlers:            
+        handler.flush()

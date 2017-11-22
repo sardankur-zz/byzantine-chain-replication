@@ -1,20 +1,63 @@
+import logging
+import time
+
 common = import_da("common")
 
 OpArgs = common.OpArgs
 
 class Failure():
-    def __init__(self):
-        pass
+    def __init__(self, failures):
+        
+        self.trackers = {
+            "client_request" : {},
+            "forwarded_request" : {},
+            "shuttle" : {},
+            "result_shuttle" : {},
+            "wedge_request" : 0,
+            "new_configuration" : 0,
+            "checkpoint" : 0,
+            "completed_checkpoint" : 0,
+            "get_running_state" : 0,
+            "catch_up" : 0
+        }        
+        self.failures = failures
 
-    @staticmethod
-    def get_failure(failures, trigger, m, c=None, type=None):
-        filtered_failures = []
-        for failure in failures:
-            if trigger == failure[0][0] and failure[0][2] == str(m) and \
-                    (c is None or (c is not None and failure[0][1] == str(c))) and \
-                    (type is None or (type is not None and failure[1] == type)):
-                filtered_failures.append(failure)
-        return filtered_failures
+    def incr(self, tracker, n = None):
+        if isinstance(self.trackers, dict):            
+            if self.trackers[tracker].get(str(n), None) is None:
+                self.trackers[tracker][str(n)] = 1
+            else:
+                self.trackers[tracker][str(n)] = self.trackers[tracker][str(n)] + 1        
+        else:
+            self.trackers[tracker] = self.trackers[tracker] + 1        
+
+    def get(self, tracker, n = None):
+        if isinstance(self.trackers, dict):            
+            return self.trackers[tracker].get(str(n), 0)
+        else:
+            return self.trackers[tracker]
+    
+    def get_failure(self, triggers, operations, cid = None):
+                
+        if not isinstance(triggers, list):
+            triggers = [triggers]        
+
+        if not isinstance(operations, list):
+            operations = [operations]            
+
+        for failure in self.failures:
+            for trigger in triggers:
+                for operation in operations:
+                    # failure list
+                    # 0: trigger, 1: trigger args, 2: failure, 3: failure args                                        
+                    if trigger == failure[0] and operation == failure[2] \
+                        and \
+                            ((len(failure[1]) == 1 and str(failure[1][0]) == str(self.get(trigger))) \
+                            or \
+                            (len(failure[1]) == 2 and str(failure[1][0]) == \
+                                str(cid) and str(failure[1][1]) == str(self.get(trigger, cid)))) :                                                    
+                        return failure  
+        return None
 
 
     @staticmethod
@@ -24,3 +67,30 @@ class Failure():
     @staticmethod
     def change_result():
         return 'OK'
+
+    @staticmethod
+    def extra_op(dictionary):
+        dictionary['a'] = 'a'
+
+    @staticmethod
+    def crash():
+        logging.shutdown()
+        os._exit(-1)
+
+    @staticmethod
+    def truncate_history(history, n):
+        return history[:n]
+
+    @staticmethod
+    def sleep(t):
+        time.sleep(t)
+
+    @staticmethod
+    def invalidate_signature(statement):
+        statement.signature = "abc"
+
+    @staticmethod
+    def print(failure):
+        return "FAILURE : %s %s %s %s" % (failure[0], failure[1], failure[2], failure[3])
+
+

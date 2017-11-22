@@ -6,12 +6,12 @@ from utils import *
 import copy
 import itertools
 
-get_logger = import_da("app_logging").get_logger
+app_logging = import_da("app_logging")
 Replica = import_da("replica").Replica
 common = import_da("common")
 Config = common.Config
 
-logger = get_logger("OLYMPUS")
+logger = app_logging.get_logger("OLYMPUS")
 
 class Olympus(process):
 
@@ -27,8 +27,7 @@ class Olympus(process):
         self.caught_up_state_hash = {}
 
         formatter = logging.Formatter("%(asctime)s : %(levelname)5s : %(name)9s : %(message)s")
-        for handler in logger.handlers:            
-            handler.setFormatter(formatter)
+        app_logging.set_formatter(logger, formatter)        
 
         logger.info("Setup Completed")
 
