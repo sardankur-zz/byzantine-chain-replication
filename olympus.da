@@ -126,7 +126,8 @@ class Olympus(process):
             for replica in replicas:
                 send(('replica_force_shutdown'), to=replica)
 
-            configure(slot_number, client_requests, running_state)    
+            checkpointed_slot = -1  ##TODO  
+            configure(checkpointed_slot, slot_number, client_requests, running_state)  
             break
                     
         self.systemState = 'Normal'
@@ -142,7 +143,7 @@ class Olympus(process):
         for rid in histories:
             history = histories[rid]
             for order_proof in history:
-                if not isOrderProofValid(order_proof[0].slot_number, order_proof[0].operation, order_proof, self.configs[len(self.configs) - 1].public_keys):
+                if not isvalidOrderProof(order_proof[0].slot_number, order_proof[0].operation, order_proof, self.configs[len(self.configs) - 1].public_keys):
                     logger.info('Removing rid = %d from quorum selection for having invalid order proof history' %rid)
                     del histories[rid]
                     break
@@ -178,7 +179,7 @@ class Olympus(process):
         return True
 
 
-    def configure(slot_number = -1, client_requests = {}, dictionary = {}):        
+    def configure(checkpointed_slot = -1, slot_number = -1, client_requests = {}, dictionary = {}):        
 
         logger.info("CONFIG : Creating new CONFIGURATION = %d", len(self.configs))        
 
@@ -200,7 +201,7 @@ class Olympus(process):
         failure_cases = failures.get(str(config.config_id), {})
         logger.info("CONFIG : Creating replicas for configuration = %d" % config.config_id)
         for i in range(2*t + 1):
-            setup(config.replicas[i], (head_timeout, nonhead_timeout, i, config.config_id, slot_number, client_requests, dictionary,
+            setup(config.replicas[i], (head_timeout, nonhead_timeout, i, config.config_id, checkpointed_slot, slot_number, client_requests, dictionary,
                 self, config.replicas, config.private_keys[i], config.public_keys, failure_cases.get(str(i), [])))                        
             start(config.replicas[i])                
 

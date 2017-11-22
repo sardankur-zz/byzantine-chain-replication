@@ -43,8 +43,20 @@ class ResultStatement():
     def __str__(self):
         return "%s - %s - %s" % (self.operation, self.result_hash, self.signature)
 
+class CheckpointStatement():
+    def __init__(self, ending_slot:int, running_state_hash, signature):
+        self.ending_slot = ending_slot
+        self.running_state_hash = running_state_hash
+        self.signature = signature
+
+    def __repr__(self):
+        return str(self)
+
+    def __str__(self):
+        return "%s - %s - %s" % (self.ending_slot, self.running_state_hash, self.signature)
+
 class Shuttle():
-    def __init__(self, slot_number, opArgs, client, cid, requestIndex):
+    def __init__(self, slot_number, opArgs, client, cid, requestIndex, isCheckpointingShuttle:bool):
         self.slot_number = slot_number
         self.client = client
         self.cid = cid
@@ -52,12 +64,15 @@ class Shuttle():
         self.opArgs = opArgs
         self.order_proof = []
         self.result_proof = []
+        self.checkpoint_proof = None
+        if isCheckpointingShuttle:
+            self.checkpoint_proof = [] 
 
     def __repr__(self):
         return str(self)
 
     def __str__(self):
-        return str("Slot_number: %d Cid: %d requestIndex: %d\nOpt Args : %s\norder_proof: %s\nresult_proof: %s" % (self.slot_number, self.cid, self.requestIndex, self.opArgs, self.order_proof, self.result_proof))
+        return str("Slot_number: %d Cid: %d requestIndex: %d\nOpt Args : %s\norder_proof: %s\nresult_proof: %s\n checkpoint_proof = %s" % (self.slot_number, self.cid, self.requestIndex, self.opArgs, self.order_proof, self.result_proof, self.checkpoint_proof))
 
 class ResultShuttle():
     def __init__(self, shuttle:Shuttle, result):
@@ -67,14 +82,14 @@ class ResultShuttle():
         self.requestIndex = shuttle.requestIndex
         self.opArgs = shuttle.opArgs
         self.result_proof = shuttle.result_proof
+        self.checkpoint_proof = shuttle.checkpoint_proof
         self.result = result
     
     def __repr__(self):
         return str(self)
 
     def __str__(self):
-        return str("Slot_number: %d Cid: %d requestIndex: %d result_proof: %s\nresult: %s" % (self.slot_number, self.cid, self.requestIndex,  self.result_proof, self.result))
-
+        return str("Slot_number: %d Cid: %d requestIndex: %d result_proof: %s\n result: %s\n checkpoint_proof = %s" % (self.slot_number, self.cid, self.requestIndex,  self.result_proof, self.result, self.checkpoint_proof))
 
 class Operation():
 
