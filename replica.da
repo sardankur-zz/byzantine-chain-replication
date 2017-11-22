@@ -107,7 +107,15 @@ class Replica(process):
 
         crashOrSleep('get_running_state')
 
-        send(('running_state', self.slot_number, self.client_requests, self.dictionary), to=olympus)
+        client_pending_response = {}
+        pending_results = []
+        for clientId, requestIndex in self.resultShuttleCache:                
+            if client_pending_response.get(clientId, - 1) < requestIndex:
+                client_pending_response[clientId] = requestIndex
+        for clientId in client_pending_response:
+            pending_results.append(self.resultShuttleCache[(clientId, client_pending_response[clientId])])
+        
+        send(('running_state', self.slot_number, self.client_requests, self.dictionary, pending_results), to=olympus)
 
 
 

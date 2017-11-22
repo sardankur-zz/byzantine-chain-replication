@@ -13,6 +13,8 @@ common = import_da("common")
 from common import *
 
 logger = app_logging.get_logger("UTIL")
+formatter = logging.Formatter("%(asctime)s : %(levelname)5s : %(name)9s : %(message)s")
+app_logging.set_formatter(logger, formatter)        
 
 def creatSignedOrderStatement(slot_number, opArgs, private_key_param):
     orderStatement = str(slot_number) + str(opArgs)

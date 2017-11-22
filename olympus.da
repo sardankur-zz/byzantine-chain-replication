@@ -7,7 +7,7 @@ import copy
 import itertools
 
 app_logging = import_da("app_logging")
-replica = import_da("replica").Replica
+replica = import_da("replica")
 common = import_da("common")
 
 from common import *
@@ -26,7 +26,7 @@ class Olympus(process):
         self.latest_config = None
         self.default_timeout = 3
         self.order_proof_history = {}
-        self.caught_up_state_hash = {}
+        self.caught_up_state_hash = {}        
 
         formatter = logging.Formatter("%(asctime)s : %(levelname)5s : %(name)9s : %(message)s")
         app_logging.set_formatter(logger, formatter)        
@@ -92,37 +92,44 @@ class Olympus(process):
         for quorum in Q_list:
             hist = []
             for rid in quorum:
-                hist.append(valid_history)
+                hist.append(valid_history[rid])
 
             if not isValidQuorum(hist):
                 logger.info("Quorum: not a valid quorum %s" % quorum)
-                continue
+                continue  
+            
+            logger.info("Quorum: Quorum is valid") 
 
-            self.caught_up_state_hash = {}
+            self.caught_up_state_hash = {}            
             for rid in quorum:                
-                send(('catch_up'), to=replicas[rid])
-
+                send(('catch_up'), to=replicas[rid])     
+                
             if(await(len(self.caught_up_state_hash) == len(quorum))):                
                 pass
             elif timeout(self.default_timeout):    
                 continue
+            logger.info("Quorum: received all/some caught_up responses")       
 
             if not isValidCaughtUpStateHash():
                 logger.info("Quorum: Caught Up State is not valid")
                 continue
 
-            logger.info("Quorum: Get running state")
+            logger.info("Quorum: Get running state from replica")
 
             clk = logical_clock()
             longest_history_replica = quorum[0]
 
             send(('get_running_state'), to= replicas[longest_history_replica])                        
-            await(some(received(('running_state', slot_number, client_requests, running_state), clk=rclk), has= (rclk > clk)))            
-            logger.info("Quorum: Running state recevied %s" % running_state)
+            await(some(received(('running_state', slot_number, client_requests, running_state, pending_results), clk=rclk), has= (rclk > clk)))            
+            logger.info("Quorum: Running state received %s" % running_state)
 
             if(not isRunningStateValid(running_state, self.caught_up_state_hash[longest_history_replica])):
                 logger.info("Quorum: Quorum:State hash is not consistent with Running state")
                 continue
+            
+            for resultShuttle in pending_results:                
+                send(('olympus_client_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)                
+
 
             for replica in replicas:
                 send(('replica_force_shutdown'), to=replica)
@@ -141,13 +148,16 @@ class Olympus(process):
         self.caught_up_state_hash[rid] = state_hash
 
     def filter_invalid_order_proof_history(histories):
+        rids_for_deletion = []
         for rid in histories:
-            history = histories[rid]
+            history = histories[rid]            
             for order_proof in history:
                 if not isvalidOrderProof(order_proof[0].slot_number, order_proof[0].operation, order_proof, self.configs[len(self.configs) - 1].public_keys):
                     logger.info('Removing rid = %d from quorum selection for having invalid order proof history' %rid)
-                    del histories[rid]
+                    rids_for_deletion.append(rid)                    
                     break
+        for rid in rids_for_deletion:
+            del histories[rid]
 
     def isPrefix(prefix, proof):
         for i in range(len(prefix)):
