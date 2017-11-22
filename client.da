@@ -5,12 +5,14 @@ import nacl.signing
 import nacl.hash
 import nacl.encoding
 import time
-from utils import *
 
 HASHER = nacl.hash.sha256
 app_logging = import_da("app_logging")
 common = import_da("common")
-OpArgs = common.OpArgs
+utils = import_da("utils")
+
+from common import *
+from utils import *
 
 
 logger = app_logging.get_logger("CLIENT")

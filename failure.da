@@ -3,7 +3,7 @@ import time
 
 common = import_da("common")
 
-OpArgs = common.OpArgs
+from common import *
 
 class Failure():
     def __init__(self, failures):

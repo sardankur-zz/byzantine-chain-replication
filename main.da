@@ -4,12 +4,14 @@ import re
 import json
 import logging
 
-common = import_da("common")
-Operation = common.Operation
 app_logging = import_da("app_logging")
-Olympus = import_da("olympus").Olympus
-Client = import_da("client").Client
+common = import_da("common")
+olympus = import_da("olympus")
+client = import_da("client")
 
+from common import *
+from olympus import *
+from client import *
 
 logger = app_logging.get_logger("MAIN")
 formatter = logging.Formatter("%(asctime)s : %(levelname)5s : %(name)9s : %(message)s")

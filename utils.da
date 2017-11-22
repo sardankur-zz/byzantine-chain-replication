@@ -10,15 +10,7 @@ HASHER = nacl.hash.sha256
 app_logging = import_da("app_logging")
 common = import_da("common")
 
-
-OpArgs = common.OpArgs
-OrderStatement = common.OrderStatement
-ResultStatement = common.ResultStatement
-Shuttle = common.Shuttle
-ResultShuttle = common.ResultShuttle
-Operation = common.Operation
-Config = common.Config
-ReplicaState = common.ReplicaState
+from common import *
 
 logger = app_logging.get_logger("UTIL")
 
@@ -34,7 +26,12 @@ def creatSignedResultStatement(opArgs, result, private_key_param):
     resultStatement = str(opArgs).encode(encoding='UTF-8') + result_hash
     signature = private_key_param.sign(resultStatement)
     return ResultStatement(opArgs, result_hash, signature)
-
+    
+def getcheckpointStatment(slot_number, dictionary_str, private_key_param):
+    state_hash = HASHER(dictionary_str.encode(encoding='UTF-8'), encoder=nacl.encoding.HexEncoder)
+    runningStateStatement = str(slot_number).encode(encoding='UTF-8') + state_hash
+    signature = private_key_param.sign(runningStateStatement)
+    return CheckpointStatement(slot_number, state_hash, signature)
 
 def isvalidResultProof(opArgs, result, result_proof, public_keys_param):
     result_hash = HASHER(result.encode(encoding='UTF-8'), encoder=nacl.encoding.HexEncoder)
@@ -60,7 +57,7 @@ def isvalidResultProof(opArgs, result, result_proof, public_keys_param):
 
     return True 
 
-def isOrderProofValid(slot_number, opArgs, order_proof, public_keys_param):
+def isvalidOrderProof(slot_number, opArgs, order_proof, public_keys_param):
     i = 0
     for orderStatement in order_proof:
         if orderStatement is None:
@@ -80,3 +77,46 @@ def isOrderProofValid(slot_number, opArgs, order_proof, public_keys_param):
         i = i + 1
         
     return True
+
+def isvalidCheckpointProof(slot_number, dictionary_str, proof, public_keys_param):
+    local_state_hash = HASHER(dictionary_str.encode(encoding='UTF-8'), encoder=nacl.encoding.HexEncoder)
+    i = 0
+    for checkpointStatement in proof:
+        if checkpointStatement is None:
+            logger.debug("Checkpoint Statement number = %d is missing" % i)
+            return False
+        if checkpointStatement.ending_slot != slot_number:
+            logger.debug("Slot number for Checkpoint Statement number = %d is not correct" % i)
+            return False
+        if not sodium_memcmp(checkpointStatement.running_state_hash, local_state_hash):
+            logger.debug("Running_state for Checkpoint Statement number = %d is not valid" % i)
+            return False
+        try:
+            public_keys_param[i].verify(checkpointStatement.signature)
+        except Exception:
+            logger.debug("Checkpoint Statement number = %d is tempered" % i)
+            return False   
+        i = i + 1
+
+    return True    
+
+def isconsistentCheckpointProof(slot_number, proof, public_keys_param):
+    i = 0
+    for checkpointStatement in proof:
+        if checkpointStatement is None:
+            logger.debug("Checkpoint Statement number = %d is missing" % i)
+            return False
+        if checkpointStatement.ending_slot != slot_number:
+            logger.debug("Slot number for Checkpoint Statement number = %d is not correct" % i)
+            return False
+        if not sodium_memcmp(checkpointStatement.running_state_hash, proof[0].running_state_hash):
+            logger.debug("Running_state_hash for Checkpoint Statement number = %d is not consistent" % i)
+            return False
+        try:
+            public_keys_param[i].verify(checkpointStatement.signature)
+        except Exception:
+            logger.debug("Checkpoint Statement number = %d is tempered" % i)
+            return False   
+        i = i + 1
+
+    return True       
