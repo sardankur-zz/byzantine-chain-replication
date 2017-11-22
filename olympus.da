@@ -140,8 +140,9 @@ class Olympus(process):
             for replica in replicas:
                 send(('replica_force_shutdown'), to=replica)
 
-            checkpointed_slot = -1  ##TODO 
-            checkpointStatement = CheckpointStatement(None, None, None) 
+            checkpointed_slot = self.last_checkpointed_slots[quorum[0]]
+            checkpointStatement = self.checkpointStatements[quorum[0]]
+            logger.info('Quorum: starting with checkpointed_slot %d checkpointedstatement %s' %(checkpointed_slot,checkpointStatement))
             configure(checkpointed_slot, checkpointStatement, slot_number, client_requests, running_state, pending_results)  
             break
                     

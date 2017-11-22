@@ -29,7 +29,7 @@ class Replica(process):
         self.on = True
         self.state = 'Normal'                
         self.cacheSize = 10000
-        self.checkpointing_trigger = 5
+        self.checkpointing_trigger = 3
 
         self.history = []
 
@@ -175,7 +175,17 @@ class Replica(process):
 
         if((rid == 0 ) and (((self.slot_number + 1)%self.checkpointing_trigger) == 0)):
             logger.info('CHECKPTNG: Trigger Checkpointing at ending_slot = %d' %self.slot_number)
+
+            # drop, crash or sleep
+            failure = self.failure_handler.get_failure('checkpoint', 'drop')        
+            if failure is not None:
+                logger.info(self.failure_handler.print(failure))
+                return        
+
+            crashOrSleep('checkpoint')
+
             shuttle = Shuttle(self.slot_number, opArgs, p, cid, requestIndex, True)
+
         else:
             shuttle = Shuttle(self.slot_number, opArgs, p, cid, requestIndex, False)
  
@@ -362,7 +372,17 @@ class Replica(process):
 
                 if( rid == 0 and ((self.slot_number + 1)%self.checkpointing_trigger) == 0 ):
                     logger.info('CHECKPTNG: Trigger Checkpointing at slot_number = %d' %self.slot_number)
+
+                    # drop, crash or sleep
+                    failure = self.failure_handler.get_failure('checkpoint', 'drop')        
+                    if failure is not None:
+                        logger.info(self.failure_handler.print(failure))
+                        return        
+
+                    crashOrSleep('checkpoint')
+
                     shuttle = Shuttle(self.slot_number, opArgs, p, cid, requestIndex, True)
+
                 else:
                     shuttle = Shuttle(self.slot_number, opArgs, p, cid, requestIndex, False)
 
@@ -419,7 +439,7 @@ class Replica(process):
             logger.info(self.failure_handler.print(failure))
             return
 
-        crashOrSleep('forwarded_request', shuttle.cid)
+        crashOrSleep('forwarded_request', shuttle.cid)        
 
         # increment slot, valid only for head, should be done before actual increment
         failure = self.failure_handler.get_failure('shuttle', 'increment_slot', shuttle.cid)
@@ -439,7 +459,7 @@ class Replica(process):
             logger.error("Reconfigure: Order Proof is not valid cid = %d requestIndex = %d slot_number = %d" % (shuttle.cid, shuttle.requestIndex, shuttle.slot_number))
             send(('reconfigure', config_id), to=olympus)
             return
-         
+
 
         # change opArgs if failure case demands        
         failure = self.failure_handler.get_failure('shuttle', 'change_operation', shuttle.cid)        
@@ -452,7 +472,7 @@ class Replica(process):
         requestCache[(shuttle.cid, shuttle.requestIndex)] = shuttle.opArgs
 
         self.slot_number = self.slot_number + 1;
-        result = Operation.do_op(dictionary, shuttle.opArgs)
+        result = Operation.do_op(dictionary, shuttle.opArgs)        
 
         # change result if applicable        
         failure = self.failure_handler.get_failure('shuttle', 'change_result', shuttle.cid)        
@@ -472,8 +492,7 @@ class Replica(process):
         shuttle.order_proof.append(orderStatement)
         self.history.append(shuttle.order_proof)
 
-        resultStatement = creatSignedResultStatement(shuttle.opArgs, result, private_key)
-
+        resultStatement = creatSignedResultStatement(shuttle.opArgs, result, private_key)        
 
         # change result signature
         failure = self.failure_handler.get_failure('shuttle', 'invalid_result_sig', shuttle.cid)        
@@ -483,7 +502,16 @@ class Replica(process):
 
         shuttle.result_proof.append(resultStatement)        
         
-        if shuttle.checkpoint_proof is not None:   
+        if shuttle.checkpoint_proof is not None:               
+
+            # drop, crash or sleep
+            failure = self.failure_handler.get_failure('checkpoint', 'drop')        
+            if failure is not None:
+                logger.info(self.failure_handler.print(failure))
+                return        
+
+            crashOrSleep('checkpoint')            
+
             if not isvalidCheckpointProof(shuttle.slot_number, str(self.dictionary), shuttle.checkpoint_proof, self.public_keys):
                 logger.error("Reconfigure: Checkpoint Proof is not valid for ending_slot_number = %d" % (shuttle.slot_number))
                 send(('reconfigure', config_id), to=olympus)
@@ -500,6 +528,16 @@ class Replica(process):
         else:
             logger.info("Client Response sent to cid = %d" % shuttle.cid)
             send(('client_response', result, shuttle.result_proof, shuttle.requestIndex, self.config_id), to=shuttle.client)
+
+            # drop, crash or sleep
+            failure = self.failure_handler.get_failure('shuttle', 'drop', shuttle.cid)
+            if failure is not None:
+                logger.info(self.failure_handler.print(failure))
+                return
+
+            crashOrSleep('forwarded_request', shuttle.cid)
+
+
             
             resultShuttle = ResultShuttle(shuttle, result)
 
@@ -508,7 +546,17 @@ class Replica(process):
                 send(('reconfigure', config_id), to=olympus)
                 return
 
-            if resultShuttle.checkpoint_proof is not None:   
+            if resultShuttle.checkpoint_proof is not None:                   
+
+                # drop, crash or sleep
+                failure = self.failure_handler.get_failure('result_shuttle', 'drop', resultShuttle.cid)        
+                if failure is not None:
+                    logger.info(self.failure_handler.print(failure))
+                    return        
+
+                crashOrSleep('result_shuttle', resultShuttle.cid)
+
+
                 if not isconsistentCheckpointProof(resultShuttle.slot_number, resultShuttle.checkpoint_proof, self.public_keys):
                     logger.error("Reconfigure: Checkpoint Proof is not valid for ending_slot_number = %d" % (resultShuttle.slot_number))
                     send(('reconfigure', config_id), to=olympus)
@@ -570,6 +618,15 @@ class Replica(process):
             return
 
         if resultShuttle.checkpoint_proof is not None:   
+
+            # drop, crash or sleep
+            failure = self.failure_handler.get_failure('completed_checkpoint', 'drop')        
+            if failure is not None:
+                logger.info(self.failure_handler.print(failure))
+                return        
+
+            crashOrSleep('completed_checkpoint')
+
             if not isconsistentCheckpointProof(resultShuttle.slot_number, resultShuttle.checkpoint_proof, self.public_keys):
                 logger.error("Reconfigure: Checkpoint Proof is not valid for ending_slot_number = %d" % (resultShuttle.slot_number))
                 send(('reconfigure', config_id), to=olympus)

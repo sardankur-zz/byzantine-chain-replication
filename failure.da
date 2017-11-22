@@ -23,7 +23,7 @@ class Failure():
         self.failures = failures
 
     def incr(self, tracker, n = None):
-        if isinstance(self.trackers, dict):            
+        if isinstance(self.trackers[tracker], dict):            
             if self.trackers[tracker].get(str(n), None) is None:
                 self.trackers[tracker][str(n)] = 1
             else:
@@ -32,7 +32,7 @@ class Failure():
             self.trackers[tracker] = self.trackers[tracker] + 1        
 
     def get(self, tracker, n = None):
-        if isinstance(self.trackers, dict):            
+        if isinstance(self.trackers[tracker], dict):            
             return self.trackers[tracker].get(str(n), 0)
         else:
             return self.trackers[tracker]
