@@ -17,7 +17,7 @@ logger = app_logging.get_logger("OLYMPUS")
 
 class Olympus(process):
 
-    def setup(head_timeout: int, nonhead_timeout: int, t: int, failures, host_replica):
+    def setup(head_timeout: int, nonhead_timeout: int, t: int, failures, host_replica, clients):
     
         self.on = True
         self.systemState = 'Normal' 
@@ -26,7 +26,9 @@ class Olympus(process):
         self.latest_config = None
         self.default_timeout = 3
         self.order_proof_history = {}
-        self.caught_up_state_hash = {}        
+        self.last_checkpointed_slots = {}
+        self.checkpointStatements = {}    
+        self.caught_up_statement = {}        
 
         formatter = logging.Formatter("%(asctime)s : %(levelname)5s : %(name)9s : %(message)s")
         app_logging.set_formatter(logger, formatter)        
@@ -61,13 +63,15 @@ class Olympus(process):
         logger.info("Reconfigure: Received Reconfigure Request")
         
         # Don't entertain repeated requests before reconfiguration is done 
-        if config_id < self.latest_config.config_id or (config_id == self.latest_config.config_id and self.systemState == 'Reconfiguring'):            
+        if ((config_id < self.latest_config.config_id) or (config_id == self.latest_config.config_id and self.systemState == 'Reconfiguring')):            
             logger.info("Reconfigure: Duplicate Reconfigure Request")
             return
 
         self.systemState = 'Reconfiguring'
 
-        self.order_proof_history = {}        
+        self.order_proof_history = {}
+        self.last_checkpointed_slots = {}
+        self.checkpointStatements = {}      
         replicas = self.latest_config.replicas
         
         logger.info("Reconfigure: Sending wedge requests to all replicas")
@@ -94,23 +98,28 @@ class Olympus(process):
             for rid in quorum:
                 hist.append(valid_history[rid])
 
+            if not isconsistentCheckpointStatements():
+                logger.info("Quorum: doesn't have consistent checkpoints in quorum %s" % quorum)
+                continue    
+            logger.info("Quorum: Checkpoints are consistent") 
+
             if not isValidQuorum(hist):
                 logger.info("Quorum: not a valid quorum %s" % quorum)
                 continue  
             
             logger.info("Quorum: Quorum is valid") 
 
-            self.caught_up_state_hash = {}            
+            self.caught_up_statement = {}            
             for rid in quorum:                
-                send(('catch_up'), to=replicas[rid])     
+                send(('catch_up', hist[0][-1]), to=replicas[rid])     
                 
-            if(await(len(self.caught_up_state_hash) == len(quorum))):                
+            if(await(len(self.caught_up_statement) == len(quorum))):                
                 pass
             elif timeout(self.default_timeout):    
                 continue
             logger.info("Quorum: received all/some caught_up responses")       
 
-            if not isValidCaughtUpStateHash():
+            if not isValidCaughtUpStateHash(self.latest_config.public_keys):
                 logger.info("Quorum: Caught Up State is not valid")
                 continue
 
@@ -123,29 +132,29 @@ class Olympus(process):
             await(some(received(('running_state', slot_number, client_requests, running_state, pending_results), clk=rclk), has= (rclk > clk)))            
             logger.info("Quorum: Running state received %s" % running_state)
 
-            if(not isRunningStateValid(running_state, self.caught_up_state_hash[longest_history_replica])):
+            if(not isRunningStateValid(running_state, self.caught_up_statement[longest_history_replica])):
                 logger.info("Quorum: Quorum:State hash is not consistent with Running state")
-                continue
-            
-            for resultShuttle in pending_results:                
-                send(('olympus_client_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=resultShuttle.client)                
+                continue                    
 
 
             for replica in replicas:
                 send(('replica_force_shutdown'), to=replica)
 
-            checkpointed_slot = -1  ##TODO  
-            configure(checkpointed_slot, slot_number, client_requests, running_state)  
+            checkpointed_slot = -1  ##TODO 
+            checkpointStatement = CheckpointStatement(None, None, None) 
+            configure(checkpointed_slot, checkpointStatement, slot_number, client_requests, running_state, pending_results)  
             break
                     
         self.systemState = 'Normal'
 
 
-    def receive(msg=('wedged_response', rid, history), from_=p):
+    def receive(msg=('wedged_response', rid, history, last_checkpointed_slot, checkpointStatement), from_=p):
         self.order_proof_history[rid] = history
+        self.last_checkpointed_slots[rid] = last_checkpointed_slot
+        self.checkpointStatements[rid] = checkpointStatement
 
     def receive(msg=('caught_up', rid, state_hash), from_=p):
-        self.caught_up_state_hash[rid] = state_hash
+        self.caught_up_statement[rid] = state_hash
 
     def filter_invalid_order_proof_history(histories):
         rids_for_deletion = []
@@ -175,22 +184,51 @@ class Olympus(process):
                     return False
         return True            
 
-    def isValidCaughtUpStateHash():
+    def isValidCaughtUpStateHash(public_keys_param):
         rid_init = None
-        for rid in self.caught_up_state_hash:
+        for rid in self.caught_up_statement:
             if rid_init is None:
                 rid_init = rid
                 continue
 
-            if self.caught_up_state_hash[rid] != self.caught_up_state_hash[rid_init]:
+            if self.caught_up_statement[rid].ending_slot != self.caught_up_statement[rid_init].ending_slot:
+                logger.info('Quorum: Last catch_up final slots for replicas dont match')
                 return False
+
+            if self.caught_up_statement[rid].running_state_hash != self.caught_up_statement[rid_init].running_state_hash:
+                logger.info('Quorum: Last catch_up state hash for replicas dont match')
+                return False
+
+            try:
+                public_keys_param[rid].verify(self.caught_up_statement[rid].signature)
+            except Exception:
+                logger.debug("Caught_up_statement number = %d is tampered" % i)
+                return False  
+                
         return True
 
+    def isconsistentCheckpointStatements():
+        rid_init = None
+        for rid in self.last_checkpointed_slots:
+            if rid_init is None:
+                rid_init = rid
+                continue
+
+            if self.last_checkpointed_slots[rid] != self.last_checkpointed_slots[rid_init]:
+                logger.info('Quorum: Last Checkpointed slots for replicas dont match')
+                return False
+
+            if self.checkpointStatements[rid] != self.checkpointStatements[rid_init]:
+                logger.info('Quorum: CheckpointStatements for replicas dont match')
+                return False
+
+        return True
+        
     def isRunningStateValid(running_state, hash):
         return True
 
 
-    def configure(checkpointed_slot = -1, slot_number = -1, client_requests = {}, dictionary = {}):        
+    def configure(checkpointed_slot = -1, checkpointStatement = None, slot_number = -1, client_requests = {}, dictionary = {}, pending_results = {}):        
 
         logger.info("CONFIG : Creating new CONFIGURATION = %d", len(self.configs))        
 
@@ -212,13 +250,23 @@ class Olympus(process):
         failure_cases = failures.get(str(config.config_id), {})
         logger.info("CONFIG : Creating replicas for configuration = %d" % config.config_id)
         for i in range(2*t + 1):
-            setup(config.replicas[i], (head_timeout, nonhead_timeout, i, config.config_id, checkpointed_slot, slot_number, client_requests, dictionary,
+            setup(config.replicas[i], (head_timeout, nonhead_timeout, i, config.config_id, checkpointed_slot, checkpointStatement, slot_number, client_requests, dictionary,
                 self, config.replicas, config.private_keys[i], config.public_keys, failure_cases.get(str(i), [])))                        
             start(config.replicas[i])                
 
         self.configs.append(config)
         self.latest_config = config
 
+        #send latest configuration to clients
+        for cid in clients:
+            result = None
+            if pending_results.get(cid, None) is not None:
+                resultShuttle = pending_results[cid]                
+                send(('new_configuration', self.latest_config, resultShuttle.result, resultShuttle.result_proof, \
+                    resultShuttle.requestIndex), to=clients[cid])
+            else:
+                send(('new_configuration', self.latest_config, None, None, None), to=clients[cid])
+        
 
     def receive(msg=('olympus_run'), from_=p): 
         configure()

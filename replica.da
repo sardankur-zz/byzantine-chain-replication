@@ -6,6 +6,7 @@ import nacl.encoding
 import time
 import pylru
 import os
+import copy
 
 
 HASHER = nacl.hash.sha256
@@ -22,8 +23,9 @@ logger = app_logging.get_logger("REPLICA")
 
 class Replica(process):
     
-    def setup(head_timeout: int, nonhead_timeout: int, rid: int, config_id: int, checkpointed_slot: int, slot_number: int, client_requests, dictionary,
-            olympus, replicas, private_key, public_keys, failures):
+    def setup(head_timeout: int, nonhead_timeout: int, rid: int, config_id: int, checkpointed_slot: int, 
+              checkpointStatement, slot_number: int, client_requests, dictionary,
+              olympus, replicas, private_key, public_keys, failures):
         self.on = True
         self.state = 'Normal'                
         self.cacheSize = 10000
@@ -80,10 +82,10 @@ class Replica(process):
         crashOrSleep('wedge_request')
 
         self.state = 'Immutable' 
-        send(('wedged_response', self.rid, self.history), to=olympus)
+        send(('wedged_response', self.rid, self.history, self.checkpointed_slot, self.checkpointStatement), to=olympus)
 
 
-    def receive(msg=('catch_up'), from_=p):        
+    def receive(msg=('catch_up', longest_history), from_=p):        
         logger.info("Received Catch_Up Request")  
 
         failure = self.failure_handler.get_failure('catch_up', 'drop')        
@@ -93,7 +95,16 @@ class Replica(process):
 
         crashOrSleep('catch_up')
 
-        send(('caught_up', rid, 0), to=olympus)  ####Need to do this  
+        copy_state = copy.deepcopy(self.dictionary)        
+
+        for order_proof in longest_history:            
+            orderStatement = order_proof[0]            
+            if(orderStatement.slot_number > self.slot_number):
+                Operation.do_op(copy_state, orderStatement.operation)    
+
+        caught_up_checkpoint_statement = getcheckpointStatment(longest_history[-1].slot_number, str(copy_state), self.private_key)      
+                
+        send(('caught_up', rid, caught_up_checkpoint_statement), to=olympus)  ####Need to do this  
 
 
 
@@ -108,12 +119,12 @@ class Replica(process):
         crashOrSleep('get_running_state')
 
         client_pending_response = {}
-        pending_results = []
+        pending_results = {}
         for clientId, requestIndex in self.resultShuttleCache:                
             if client_pending_response.get(clientId, - 1) < requestIndex:
                 client_pending_response[clientId] = requestIndex
         for clientId in client_pending_response:
-            pending_results.append(self.resultShuttleCache[(clientId, client_pending_response[clientId])])
+            pending_results[clientId] = (self.resultShuttleCache[(clientId, client_pending_response[clientId])])
         
         send(('running_state', self.slot_number, self.client_requests, self.dictionary, pending_results), to=olympus)
 
@@ -228,7 +239,7 @@ class Replica(process):
                 retransmitCache[(cid,requestIndex)] = 'Responded'
 
             logger.info("Replying to retransmit request from resultCache. cid = %d and requestIndex = %d" % (cid, requestIndex))   
-            send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex), to=p)
+            send(('client_retransmit_response', resultShuttle.result, resultShuttle.result_proof, resultShuttle.requestIndex, self.config_id), to=p)
             return 
         
         # otherwise forward request to head (even if this request is at head)       
@@ -488,7 +499,7 @@ class Replica(process):
             send(('shuttle', shuttle), to=nextr)
         else:
             logger.info("Client Response sent to cid = %d" % shuttle.cid)
-            send(('client_response', result, shuttle.result_proof, shuttle.requestIndex), to=shuttle.client)
+            send(('client_response', result, shuttle.result_proof, shuttle.requestIndex, self.config_id), to=shuttle.client)
             
             resultShuttle = ResultShuttle(shuttle, result)
 
@@ -505,7 +516,8 @@ class Replica(process):
                 else:
                     logger.info("CHECKPTNG: Deleting first %d entries from the history" %(resultShuttle.slot_number - self.checkpointed_slot))
                     del self.history[:(resultShuttle.slot_number - self.checkpointed_slot)]
-                    self.checkpointed_slot = resultShuttle.slot_number    
+                    self.checkpointed_slot = resultShuttle.slot_number 
+                    self.checkpointStatement = resultShuttle.checkpoint_proof[rnum-1]   
 
             #store in the cache
             resultShuttleCache[(resultShuttle.cid, resultShuttle.requestIndex)] = resultShuttle
@@ -566,6 +578,7 @@ class Replica(process):
                 logger.info("CHECKPTNG: Deleting first %d entries from the history" %(resultShuttle.slot_number - self.checkpointed_slot))
                 del self.history[:(resultShuttle.slot_number - self.checkpointed_slot)]
                 self.checkpointed_slot = resultShuttle.slot_number
+                self.checkpointStatement = resultShuttle.checkpoint_proof[rnum-1]  
 
         #cache the result shuttle
         resultShuttleCache[(resultShuttle.cid, resultShuttle.requestIndex)] = resultShuttle

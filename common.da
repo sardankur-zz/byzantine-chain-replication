@@ -55,6 +55,9 @@ class CheckpointStatement():
     def __str__(self):
         return "%s - %s - %s" % (self.ending_slot, self.running_state_hash, self.signature)
 
+    def __eq__(self, that):
+        return self.ending_slot == that.ending_slot and self.running_state_hash == that.running_state_hash and self.signature == that.signature  
+
 class Shuttle():
     def __init__(self, slot_number, opArgs, client, cid, requestIndex, isCheckpointingShuttle:bool):
         self.slot_number = slot_number
@@ -73,6 +76,7 @@ class Shuttle():
 
     def __str__(self):
         return str("Slot_number: %d Cid: %d requestIndex: %d\nOpt Args : %s\norder_proof: %s\nresult_proof: %s\n checkpoint_proof = %s" % (self.slot_number, self.cid, self.requestIndex, self.opArgs, self.order_proof, self.result_proof, self.checkpoint_proof))
+
 
 class ResultShuttle():
     def __init__(self, shuttle:Shuttle, result):
