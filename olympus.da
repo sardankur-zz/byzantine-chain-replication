@@ -17,7 +17,8 @@ logger = app_logging.get_logger("OLYMPUS")
 
 class Olympus(process):
 
-    def setup(head_timeout: int, nonhead_timeout: int, t: int, failures, host_replica, clients):
+    def setup(head_timeout: int, nonhead_timeout: int, t: int, failures, host_replica,
+        clients, checkpoint_trigger):
     
         self.on = True
         self.systemState = 'Normal' 
@@ -252,7 +253,7 @@ class Olympus(process):
         logger.info("CONFIG : Creating replicas for configuration = %d" % config.config_id)
         for i in range(2*t + 1):
             setup(config.replicas[i], (head_timeout, nonhead_timeout, i, config.config_id, checkpointed_slot, checkpointStatement, slot_number, client_requests, dictionary,
-                self, config.replicas, config.private_keys[i], config.public_keys, failure_cases.get(str(i), [])))                        
+                self, config.replicas, config.private_keys[i], config.public_keys, failure_cases.get(str(i), []), checkpoint_trigger))                        
             start(config.replicas[i])                
 
         self.configs.append(config)

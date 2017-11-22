@@ -25,11 +25,10 @@ class Replica(process):
     
     def setup(head_timeout: int, nonhead_timeout: int, rid: int, config_id: int, checkpointed_slot: int, 
               checkpointStatement, slot_number: int, client_requests, dictionary,
-              olympus, replicas, private_key, public_keys, failures):
+              olympus, replicas, private_key, public_keys, failures, checkpointing_trigger):
         self.on = True
         self.state = 'Normal'                
-        self.cacheSize = 10000
-        self.checkpointing_trigger = 3
+        self.cacheSize = 10000        
 
         self.history = []
 

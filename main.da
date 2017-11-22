@@ -125,7 +125,8 @@ def main():
 
     
     logger.info("Starting olympus")
-    setup(olympus, (test_config['head_timeout'], test_config['nonhead_timeout'], test_config['t'], failures, host["replica"], client_map))        
+    setup(olympus, (test_config['head_timeout'], test_config['nonhead_timeout'], test_config['t'], \
+        failures, host["replica"], client_map, int(test_config['checkpoint_trigger'])))        
     start(olympus)    
     
     send(('olympus_run'), to=olympus) 
