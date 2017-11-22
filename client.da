@@ -103,7 +103,7 @@ class Client(process):
                 return 'Reconfigure'
 
 
-    def receive(msg=('new_configuration', config, result, result_proof, lastRequestIndex), from_=p):               
+    def receive(msg=('new_configuration', config, lastRequestIndex, result), from_=p):               
         
         self.latest_config = config
 
@@ -111,8 +111,8 @@ class Client(process):
             logger.info("Response received from Olympus for opArgs = %s and requestIndex %d" \
                     % (self.workArgs[lastRequestIndex], lastRequestIndex)) 
             
-            # Not necessary to do result proof validation because it is coming from olympus         
-            self.requestIndex = lastRequestIndex + 1           
+        # Not necessary to do result proof validation because it is coming from olympus         
+        self.requestIndex = lastRequestIndex + 1           
 
 
         while(config.config_id == self.latest_config.config_id and self.requestIndex < len(self.workArgs)) :

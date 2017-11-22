@@ -47,6 +47,7 @@ def main():
     test_config['nonhead_timeout'] = test_config.get('nonhead_timeout', 2000) / 1000
     test_config['client_timeout'] = test_config.get('client_timeout', 2000) / 1000    
     multi_node = test_config.get('multi_node', 'False') == "True"
+    checkpoint_trigger = int(test_config.get('checkpoint_trigger', '10'))
 
     
     failures = {}
@@ -126,7 +127,7 @@ def main():
     
     logger.info("Starting olympus")
     setup(olympus, (test_config['head_timeout'], test_config['nonhead_timeout'], test_config['t'], \
-        failures, host["replica"], client_map, int(test_config['checkpoint_trigger'])))        
+        failures, host["replica"], client_map, checkpoint_trigger))        
     start(olympus)    
     
     send(('olympus_run'), to=olympus) 

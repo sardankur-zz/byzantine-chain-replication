@@ -61,7 +61,7 @@ class Olympus(process):
 
 
     def receive(msg=('reconfigure', config_id), from_=p):
-        logger.info("Reconfigure: Received Reconfigure Request")
+
         
         # Don't entertain repeated requests before reconfiguration is done 
         if ((config_id < self.latest_config.config_id) or (config_id == self.latest_config.config_id and self.systemState == 'Reconfiguring')):            
@@ -69,6 +69,7 @@ class Olympus(process):
             return
 
         self.systemState = 'Reconfiguring'
+        logger.info("Reconfigure: Processing Reconfigure Request")
 
         self.order_proof_history = {}
         self.last_checkpointed_slots = {}
@@ -92,27 +93,32 @@ class Olympus(process):
         filter_invalid_order_proof_history(valid_history)
         
         logger.info("Quorum: Attempting Quorum on valid history") 
-        Q_list = list(itertools.combinations(list(valid_history.keys()), self.t+1))
+        Q_list = sorted(list(itertools.combinations(list(valid_history.keys()), self.t+1)))
+        Q_list = list(map(lambda x: sorted(x), Q_list))
+
+        print(Q_list)
 
         for quorum in Q_list:
-            hist = []
-            for rid in quorum:
-                hist.append(valid_history[rid])
 
-            if not isconsistentCheckpointStatements():
+            if not isconsistentCheckpointStatements(quorum):
                 logger.info("Quorum: doesn't have consistent checkpoints in quorum %s" % quorum)
                 continue    
             logger.info("Quorum: Checkpoints are consistent") 
+
+            hist = []
+            for rid in quorum:
+                hist.append(valid_history[rid])
 
             if not isValidQuorum(hist):
                 logger.info("Quorum: not a valid quorum %s" % quorum)
                 continue  
             
             logger.info("Quorum: Quorum is valid") 
-
+            
+            longest_history_replica = quorum[0]
             self.caught_up_statement = {}            
             for rid in quorum:                
-                send(('catch_up', hist[quorum[0]]), to=replicas[rid])     
+                send(('catch_up', valid_history[longest_history_replica]), to=replicas[rid])     
                 
             if(await(len(self.caught_up_statement) == len(quorum))):                
                 pass
@@ -127,27 +133,33 @@ class Olympus(process):
             logger.info("Quorum: Get running state from replica")
 
             clk = logical_clock()
-            longest_history_replica = quorum[0]
 
             send(('get_running_state'), to= replicas[longest_history_replica])                        
-            await(some(received(('running_state', slot_number, client_requests, running_state, pending_results), clk=rclk), has= (rclk > clk)))            
-            logger.info("Quorum: Running state received %s" % running_state)
+            if(await(some(received(('running_state', slot_number, client_requests, running_state, last_rIndex), clk=rclk), has= (rclk > clk)))):
+                logger.info("Quorum: Running state received %s" % running_state)
+                pass
+            elif timeout(self.default_timeout):
+                logger.info('Quorum: Timed out on waiting for running state, Attempting new quorum')
+                continue               
+            
 
             if(not isRunningStateValid(running_state, self.caught_up_statement[longest_history_replica])):
-                logger.info("Quorum: Quorum:State hash is not consistent with Running state")
+                logger.info("Quorum: Quorum:State hash is not consistent with Running state, Attempting new quorum")
                 continue                    
+            logger.info('Quorum: Running state is valid with result hash')
 
-
+            logger.info('Quorum: cleaning up old replicas')    
             for replica in replicas:
                 send(('replica_force_shutdown'), to=replica)
 
-            checkpointed_slot = self.last_checkpointed_slots[quorum[0]]
-            checkpointStatement = self.checkpointStatements[quorum[0]]
+            checkpointed_slot = self.last_checkpointed_slots[longest_history_replica]
+            checkpointStatement = self.checkpointStatements[longest_history_replica]
             logger.info('Quorum: starting with checkpointed_slot %d checkpointedstatement %s' %(checkpointed_slot,checkpointStatement))
-            configure(checkpointed_slot, checkpointStatement, slot_number, client_requests, running_state, pending_results)  
-            break
-                    
-        self.systemState = 'Normal'
+            configure(checkpointed_slot, checkpointStatement, slot_number, client_requests, running_state, last_rIndex)
+            self.systemState = 'Normal'  
+            return 
+        
+        logger.info('Quorum: Quorum is not possible, system compromised')            
 
 
     def receive(msg=('wedged_response', rid, history, last_checkpointed_slot, checkpointStatement), from_=p):
@@ -177,8 +189,9 @@ class Olympus(process):
         return True        
 
     def isValidQuorum(hist):
-        n = len(hist)
-        m = len(hist[n-1])
+        print(hist)
+        n = len(hist)      #length of quorum
+        m = len(hist[n-1]) #length of shortest history
         for i in range(m):
             longest_proof = hist[n-1][i]     
             for j in range(n-1):
@@ -209,9 +222,9 @@ class Olympus(process):
                 
         return True
 
-    def isconsistentCheckpointStatements():
+    def isconsistentCheckpointStatements(quorum):
         rid_init = None
-        for rid in self.last_checkpointed_slots:
+        for rid in quorum:
             if rid_init is None:
                 rid_init = rid
                 continue
@@ -230,7 +243,7 @@ class Olympus(process):
         return True
 
 
-    def configure(checkpointed_slot = -1, checkpointStatement = None, slot_number = -1, client_requests = {}, dictionary = {}, pending_results = {}):        
+    def configure(checkpointed_slot = -1, checkpointStatement = None, slot_number = -1, client_requests = {}, dictionary = {}, last_rIndex = {}):        
 
         logger.info("CONFIG : Creating new CONFIGURATION = %d", len(self.configs))        
 
@@ -262,12 +275,10 @@ class Olympus(process):
         #send latest configuration to clients
         for cid in clients:
             result = None
-            if pending_results.get(cid, None) is not None:
-                resultShuttle = pending_results[cid]                
-                send(('new_configuration', self.latest_config, resultShuttle.result, resultShuttle.result_proof, \
-                    resultShuttle.requestIndex), to=clients[cid])
+            if last_rIndex.get(cid, None) is not None:               
+                send(('new_configuration', self.latest_config, last_rIndex[cid], None), to=clients[cid])
             else:
-                send(('new_configuration', self.latest_config, None, None, None), to=clients[cid])
+                send(('new_configuration', self.latest_config, -1, None), to=clients[cid])
         
 
     def receive(msg=('olympus_run'), from_=p): 
