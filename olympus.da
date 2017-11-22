@@ -111,7 +111,7 @@ class Olympus(process):
 
             self.caught_up_statement = {}            
             for rid in quorum:                
-                send(('catch_up', hist[0][-1]), to=replicas[rid])     
+                send(('catch_up', hist[quorum[0]]), to=replicas[rid])     
                 
             if(await(len(self.caught_up_statement) == len(quorum))):                
                 pass

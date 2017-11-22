@@ -12,7 +12,7 @@ head_timeout = 3000
 nonhead_timeout = 3000
 
 # CLIENT WORKLOAD
-workload[0] = get('movie','star'); get('movie'); append('movie',' wars')
+workload[0] = put('movie','star'); get('movie'); append('movie',' wars')
 # workload[1] = put('movie','star'); get('movie'); append('movie',' wars')
 
 # TEST

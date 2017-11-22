@@ -102,7 +102,7 @@ class Replica(process):
             if(orderStatement.slot_number > self.slot_number):
                 Operation.do_op(copy_state, orderStatement.operation)    
 
-        caught_up_checkpoint_statement = getcheckpointStatment(longest_history[-1].slot_number, str(copy_state), self.private_key)      
+        caught_up_checkpoint_statement = getcheckpointStatment(longest_history[-1][0].slot_number, str(copy_state), self.private_key)      
                 
         send(('caught_up', rid, caught_up_checkpoint_statement), to=olympus)  ####Need to do this  
 
