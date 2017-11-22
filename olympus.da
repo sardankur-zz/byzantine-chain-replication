@@ -195,7 +195,7 @@ class Olympus(process):
         for i in range(m):
             longest_proof = hist[n-1][i]     
             for j in range(n-1):
-                if not isPrefix(hist[j][i], longest_proof):
+                if ((len(hist[j]) <=  i) or (not isPrefix(hist[j][i], longest_proof))):
                     return False
         return True            
 
@@ -222,6 +222,19 @@ class Olympus(process):
                 
         return True
 
+    def isRunningStateValid(running_state, caught_up_statement):
+        if caught_up_statement is None or running_state is None:
+            logger.info('Quorum: Running state is None')
+            return False
+
+        state_hash = HASHER(str(running_state).encode(encoding='UTF-8'), encoder=nacl.encoding.HexEncoder)
+        if not sodium_memcmp(caught_up_statement.running_state_hash, state_hash):
+            logger.info('Quorum: Running state does not match the hash sent before')
+            return False
+
+        return True
+
+
     def isconsistentCheckpointStatements(quorum):
         rid_init = None
         for rid in quorum:
@@ -239,8 +252,7 @@ class Olympus(process):
 
         return True
         
-    def isRunningStateValid(running_state, hash):
-        return True
+
 
 
     def configure(checkpointed_slot = -1, checkpointStatement = None, slot_number = -1, client_requests = {}, dictionary = {}, last_rIndex = {}):        
