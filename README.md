@@ -24,9 +24,8 @@ INSTRUCTIONS:
 2. pip3 install pynacl
 3. pip3 install <module_name> : for all the modules mentioned in Platform
 4. Compile each .da file with command 'python3 -m da <FILE.da>
-5. Run command 'python3 -m da main.da <CONFIG_FILE>' : one config file per testcase as mentioned in testing.txt
+5. Run command 'python3 -m da -n <NODE_NAME> --message-buffer-size 1000000 main.da <CONFIG_FILE>' : one config file per testcase as mentioned in testing.txt
 6. Logs will appear on the terminal as well as stored in file 'Byzantine.log'
-
  
 ===========================================================================
 WORKLOAD GENERATION:
@@ -82,39 +81,49 @@ MAIN FILES:
 5. common.da:   Structures required by Replica, client and Olympus 
 6. failure.da:  For Parsing failure related strings from config file
 7. app_logging.da:	For Improving Log readability 
+8. util.da:     common functions used by all replica, client and olympus
 
+9. test_configs/ : Folder for config files for testing using failure triggers  
+				   and injections created in earlier phase of the project
+10. new_congigs/  : Folder for config files for testing using all the new  
+				   failure triggers and injections created in last phase 
+				   of this project  
 ===========================================================================
 CODE SIZE:
 ===========================================================================
 
-1.(a) Algorithm = 788 
-	  Other =     321
-	  Total =    1109
+1.(a) Algorithm = 1346 
+	  Other =      482
+	  Total =     1828
 
 -------------------------------------------------------------------------------
 Language                     files          blank        comment           code
 -------------------------------------------------------------------------------
-DistAlgo(Algorithm)              7            261              0            740
-README (other)                   1             18              0             48
-Text Files(other)                1             20             81              0
-Config Files(other)             12             60            240  			  0
+Python                           8            118              8           1648
+DAL                              8            482              0           1346
+Markdown                         1             21              0            106
+-------------------------------------------------------------------------------
+SUM:                            17            621              8           3100
+-------------------------------------------------------------------------------
+Text Files(other)                1             20            120              0
+Config Files(other)             30             60            450  			  0
 -------------------------------------------------------------------------------
 SUM:                            21            359            321            788
 -------------------------------------------------------------------------------
  
  1.(b) CLOC : https://github.com/AlDanial/cloc  
 
- 2. Algorithm:  75%
-    Functionality Interleaved: 25% 
+ 2. Algorithm:  80%
+    Functionality Interleaved: 20% 
 
 ===========================================================================
 LANGUAGE FEATURE USAGE:
 ===========================================================================
-list comprehensions = 12
-dictionary comprehensions = 11
-set comprehensions = 3
-Aggregations = 0
-Quantifications = 4
+list comprehensions = 24
+dictionary comprehensions = 20
+set comprehensions = 5
+Aggregations = 1
+Quantifications = 5
 
 ===========================================================================
 OTHER COMMENTS:
