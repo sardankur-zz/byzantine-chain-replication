@@ -59,6 +59,8 @@ class Olympus(process):
             logger.info("Forwarding client request with valid proof of misbehavior for Reconfiguration")
             send(('reconfigure', self.latest_config.config_id), to=self)
 
+        logger.info("Client request for reconfiguration has valid proof of misbehavior for Reconfiguration")    
+
 
     def receive(msg=('reconfigure', config_id), from_=p):
 
@@ -233,7 +235,6 @@ class Olympus(process):
             return False
 
         return True
-
 
     def isconsistentCheckpointStatements(quorum):
         rid_init = None
