@@ -161,7 +161,7 @@ class Replica(process):
         if failure is not None:
             logger.info(self.failure_handler.print(failure))
             self.failure_handler.incr('client_request', cid)
-            return        
+            return                
 
         crashOrSleep('client_request', cid)
 
@@ -389,7 +389,14 @@ class Replica(process):
                
                 logger.info("Creating shuttle for unrecognized retransmit request from cid = %d and requestIndex = %d" % (cid, requestIndex))
                 
-                self.slot_number = self.slot_number + 1;
+                self.slot_number = self.slot_number + 1;                
+
+                # change opArgs if failure case demands                
+                failure = self.failure_handler.get_failure('forwarded_request', 'change_operation', cid)        
+                if failure is not None:
+                    logger.info(self.failure_handler.print(failure))
+                    opArgs = self.failure_handler.change_operation()
+                    clientSignature = self.private_key.sign(str(opArgs).encode(encoding='UTF-8'))
 
                 # store received operations in the cache
                 requestCache[(cid, requestIndex)] = opArgs

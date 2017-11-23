@@ -297,7 +297,7 @@ class Olympus(process):
             
             result = None
             if last_rIndex.get(cid, None) is not None:               
-                send(('new_configuration', self.latest_config, last_rIndex[cid], None), to=clients[cid])
+                send(('new_configuration', self.latest_config, last_rIndex.get(cid, -1), None), to=clients[cid])
             else:
                 send(('new_configuration', self.latest_config, -1, None), to=clients[cid])
         

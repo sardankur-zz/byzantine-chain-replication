@@ -50,7 +50,7 @@ class Failure():
 
         for failure in self.failures:
             for trigger in triggers:
-                for operation in operations:
+                for operation in operations:                    
                     # failure list
                     # 0: trigger, 1: trigger args, 2: failure, 3: failure args                                        
                     if trigger == failure[0] and operation == failure[2] \
