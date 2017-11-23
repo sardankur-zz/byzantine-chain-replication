@@ -2,16 +2,17 @@ import json
 import nacl.signing
 import time
 import os
-from utils import *
 import copy
 import itertools
 
 app_logging = import_da("app_logging")
 replica = import_da("replica")
 common = import_da("common")
+utils = import_da("utils")
 
 from common import *
 from replica import *
+from utils import *
 
 logger = app_logging.get_logger("OLYMPUS")
 
@@ -52,10 +53,10 @@ class Olympus(process):
             send(('latest_configuration_response', self.latest_config), to=p)
 
 
-    def receive(msg=('reconfigure_client_request', result_proof, result), from_=p):
+    def receive(msg=('reconfigure_client_request', opArgs, result_proof, result), from_=p):
         logger.info("Received Reconfigure Request from client")
         if(result_proof is None or 
-          not isvalidResultProof(result_proof[0].operation, result, result_proof, self.latest_config.public_keys)):
+          not isvalidResultProof(opArgs, result, result_proof, self.latest_config.public_keys)):
             logger.info("Forwarding client request with valid proof of misbehavior for Reconfiguration")
             send(('reconfigure', self.latest_config.config_id), to=self)
 
@@ -94,13 +95,15 @@ class Olympus(process):
         valid_history = copy.copy(self.order_proof_history)
         filter_invalid_order_proof_history(valid_history)
         
-        logger.info("Quorum: Attempting Quorum on valid history") 
+        logger.info("Quorum: Removing replicas with invalid history") 
         Q_list = sorted(list(itertools.combinations(list(valid_history.keys()), self.t+1)))
         Q_list = list(map(lambda x: sorted(x), Q_list))
 
         print(Q_list)
 
         for quorum in Q_list:
+
+            logger.info("Quorum: Attempting Quorum = %s on valid history" % quorum) 
 
             if not isconsistentCheckpointStatements(quorum):
                 logger.info("Quorum: doesn't have consistent checkpoints in quorum %s" % quorum)
@@ -145,7 +148,7 @@ class Olympus(process):
                 continue               
             
 
-            if(not isRunningStateValid(running_state, self.caught_up_statement[longest_history_replica])):
+            if(not isvalidRunningState(running_state, self.caught_up_statement[longest_history_replica])):
                 logger.info("Quorum: Quorum:State hash is not consistent with Running state, Attempting new quorum")
                 continue                    
             logger.info('Quorum: Running state is valid with result hash')
@@ -177,7 +180,7 @@ class Olympus(process):
         for rid in histories:
             history = histories[rid]            
             for order_proof in history:
-                if not isvalidOrderProof(order_proof[0].slot_number, order_proof[0].operation, order_proof, self.configs[len(self.configs) - 1].public_keys):
+                if not isvalidOrderProof(order_proof[0].slot_number, order_proof[0].operation, order_proof, self.latest_config.public_keys):
                     logger.info('Removing rid = %d from quorum selection for having invalid order proof history' %rid)
                     rids_for_deletion.append(rid)                    
                     break
@@ -224,7 +227,7 @@ class Olympus(process):
                 
         return True
 
-    def isRunningStateValid(running_state, caught_up_statement):
+    def isvalidRunningState(running_state, caught_up_statement):
         if caught_up_statement is None or running_state is None:
             logger.info('Quorum: Running state is None')
             return False
@@ -261,6 +264,11 @@ class Olympus(process):
         logger.info("CONFIG : Creating new CONFIGURATION = %d", len(self.configs))        
 
         config = Config()        
+
+        #client key
+        clientSigningKey = nacl.signing.SigningKey.generate()                                
+        config.client_private_key = clientSigningKey
+        config.client_public_key = clientSigningKey.verify_key
         
         # initializing replicas
         config.replicas = []
@@ -270,7 +278,8 @@ class Olympus(process):
             signingKey = nacl.signing.SigningKey.generate()                                
             config.private_keys.append(signingKey)
             config.public_keys.append(signingKey.verify_key)   
-            config.replicas.append(replica)        
+            config.replicas.append(replica)                
+
         
         config.head = config.replicas[0]
         config.tail = config.replicas[len(config.replicas) - 1]                        
@@ -279,14 +288,15 @@ class Olympus(process):
         logger.info("CONFIG : Creating replicas for configuration = %d" % config.config_id)
         for i in range(2*t + 1):
             setup(config.replicas[i], (head_timeout, nonhead_timeout, i, config.config_id, checkpointed_slot, checkpointStatement, slot_number, client_requests, dictionary,
-                self, config.replicas, config.private_keys[i], config.public_keys, failure_cases.get(str(i), []), checkpoint_trigger))                        
+                self, config.replicas, config.private_keys[i], config.public_keys, failure_cases.get(str(i), []), checkpoint_trigger, config.client_public_key))                        
             start(config.replicas[i])                
 
         self.configs.append(config)
-        self.latest_config = config
+        self.latest_config = config        
 
         #send latest configuration to clients
         for cid in clients:
+            
             result = None
             if last_rIndex.get(cid, None) is not None:               
                 send(('new_configuration', self.latest_config, last_rIndex[cid], None), to=clients[cid])

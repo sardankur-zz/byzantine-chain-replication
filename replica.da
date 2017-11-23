@@ -25,7 +25,7 @@ class Replica(process):
     
     def setup(head_timeout: int, nonhead_timeout: int, rid: int, config_id: int, checkpointed_slot: int, 
               checkpointStatement, slot_number: int, client_requests, dictionary,
-              olympus, replicas, private_key, public_keys, failures, checkpointing_trigger):
+              olympus, replicas, private_key, public_keys, failures, checkpointing_trigger, client_public_key):
         self.on = True
         self.state = 'Normal'                
         self.cacheSize = 10000        
@@ -37,12 +37,14 @@ class Replica(process):
         self.requestCache = pylru.lrucache(self.cacheSize)
 
         self.rnum = len(replicas)
+        self.t = int((self.rnum - 1)/2)
         self.nextr = replicas[rid + 1] if (rid < rnum-1) else None
         self.prevr = replicas[rid - 1] if (rid > 0 ) else None
         self.head  = replicas[0]
 
         # failure handling
-        self.failure_handler = Failure(failures)        
+        self.failure_handler = Failure(failures)     
+        self.failure_handler.set('new_configuration', config_id - 1)   
 
         # set logging
         formatter = logging.Formatter("%(asctime)s : %(levelname)5s : %(name)6s " + str(self.rid) + " : %(message)s")
@@ -51,7 +53,10 @@ class Replica(process):
         logger.info("Setup Completed")
 
     def run():
-        logger.info("Running")
+        logger.info("Running")        
+
+        crashOrSleep('new_configuration')
+
         await(self.on == False)
         logger.info("Terminated")    
 
@@ -78,9 +83,14 @@ class Replica(process):
         if failure is not None:
             self.failure_handler.incr('wedge_request')
             logger.info(self.failure_handler.print(failure))
-            return        
+            return                
 
         crashOrSleep('wedge_request')
+
+        failure = self.failure_handler.get_failure('wedge_request', 'truncate_history')        
+        if failure is not None:            
+            logger.info(self.failure_handler.print(failure))
+            self.history = self.history[: len(self.history) -int(failure[3][0])]                
 
         self.failure_handler.incr('wedge_request')
 
@@ -138,7 +148,7 @@ class Replica(process):
 
 
 
-    def receive(msg=('client_request', opArgs, cid, requestIndex), from_=p):
+    def receive(msg=('client_request', opArgs, cid, requestIndex, clientSignature), from_=p):
     
         logger.info("Client request for cid = %d requestIndex = %d received with op args %s" % (cid, requestIndex, opArgs))
 
@@ -172,11 +182,12 @@ class Replica(process):
     
         self.slot_number = self.slot_number + 1;
 
-        # change opArgs if failure case demands        
+        # change opArgs if failure case demands                
         failure = self.failure_handler.get_failure('client_request', 'change_operation', cid)        
         if failure is not None:
             logger.info(self.failure_handler.print(failure))
             opArgs = self.failure_handler.change_operation()
+            clientSignature = self.private_key.sign(str(opArgs).encode(encoding='UTF-8'))
         
 
         # store received operations in the cache
@@ -196,10 +207,10 @@ class Replica(process):
 
             self.failure_handler.incr('checkpoint')
 
-            shuttle = Shuttle(self.slot_number, opArgs, p, cid, requestIndex, True)
+            shuttle = Shuttle(self.slot_number, opArgs, p, cid, requestIndex, True, clientSignature)
 
         else:
-            shuttle = Shuttle(self.slot_number, opArgs, p, cid, requestIndex, False)
+            shuttle = Shuttle(self.slot_number, opArgs, p, cid, requestIndex, False, clientSignature)
  
 
         result = Operation.do_op(dictionary, opArgs)
@@ -246,7 +257,7 @@ class Replica(process):
         self.failure_handler.incr('client_request', cid)
 
 
-    def receive(msg=('client_retransmit_request', opArgs, cid, requestIndex), from_=p) :
+    def receive(msg=('client_retransmit_request', opArgs, cid, requestIndex, clientSignature), from_=p) :
         
         logger.info("Received Retransmit request for cid = %d requestIndex = %d received with op args %s" % (cid, requestIndex, opArgs))
 
@@ -266,7 +277,7 @@ class Replica(process):
         
         # otherwise forward request to head (even if this request is at head)       
         logger.info('Forwarding request to head for cid = %d requestIndex = %d' % (cid, requestIndex))
-        send(('client_request_forward', opArgs, cid, requestIndex, rid), to=head)
+        send(('client_request_forward', opArgs, cid, requestIndex, rid, clientSignature), to=head)
 
         # start a timer if not head
         if(rid != 0):
@@ -287,7 +298,7 @@ class Replica(process):
                 
 
     # Only For Head 
-    def receive(msg=('client_request_forward', opArgs, cid, requestIndex, sourceRid), from_=p):
+    def receive(msg=('client_request_forward', opArgs, cid, requestIndex, sourceRid, clientSignature), from_=p):
         
         logger.info("Received Forwarded request for cid = %d requestIndex = %d from rid = %d" % (cid, requestIndex, sourceRid))
 
@@ -397,10 +408,10 @@ class Replica(process):
 
                     self.failure_handler.incr('checkpoint')
 
-                    shuttle = Shuttle(self.slot_number, opArgs, p, cid, requestIndex, True)
+                    shuttle = Shuttle(self.slot_number, opArgs, p, cid, requestIndex, True, clientSignature)
 
                 else:
-                    shuttle = Shuttle(self.slot_number, opArgs, p, cid, requestIndex, False)
+                    shuttle = Shuttle(self.slot_number, opArgs, p, cid, requestIndex, False, clientSignature)
 
                 result = Operation.do_op(dictionary, opArgs)
 
@@ -473,7 +484,7 @@ class Replica(process):
 
 
 
-        if not isvalidOrderProof(shuttle.slot_number, shuttle.opArgs, shuttle.order_proof, self.public_keys):
+        if not isvalidOrderProof(shuttle.slot_number, shuttle.opArgs, shuttle.order_proof, self.public_keys, shuttle.clientSignature, client_public_key):
             logger.error("Reconfigure: Order Proof is not valid cid = %d requestIndex = %d slot_number = %d" % (shuttle.cid, shuttle.requestIndex, shuttle.slot_number))
             send(('reconfigure', config_id), to=olympus)
             return
@@ -483,7 +494,8 @@ class Replica(process):
         failure = self.failure_handler.get_failure('shuttle', 'change_operation', shuttle.cid)        
         if failure is not None:
             logger.info(self.failure_handler.print(failure))
-            shuttle.opArgs = self.failure_handler.change_operation()        
+            shuttle.opArgs = self.failure_handler.change_operation()       
+            shuttle.clientSignature = self.private_key.sign(str(shuttle.opArgs).encode(encoding='UTF-8')) 
 
          
         # store received operations in the cache
@@ -577,9 +589,7 @@ class Replica(process):
                     logger.info(self.failure_handler.print(failure))
                     return        
 
-                crashOrSleep('completed_checkpoint')
-
-                self.failure_handler.incr('completed_checkpoint')
+                crashOrSleep('completed_checkpoint')                
 
 
                 if not isconsistentCheckpointProof(resultShuttle.slot_number, resultShuttle.checkpoint_proof, self.public_keys):
@@ -591,6 +601,14 @@ class Replica(process):
                     del self.history[:(resultShuttle.slot_number - self.checkpointed_slot)]
                     self.checkpointed_slot = resultShuttle.slot_number 
                     self.checkpointStatement = resultShuttle.checkpoint_proof[rnum-1]   
+
+                    failure = self.failure_handler.get_failure('completed_checkpoint', 'drop_checkpt_stmts')        
+                    if failure is not None:                        
+                        logger.info(self.failure_handler.print(failure))
+                        resultShuttle.checkpoint_proof = resultShuttle.checkpoint_proof[self.t+1:]                      
+                    resultShuttle.checkpoint_proof.extend([CheckpointStatement(-1, '', '') for _ in range(self.rnum - self.t)])
+
+                self.failure_handler.incr('completed_checkpoint')
 
             #store in the cache
             resultShuttleCache[(resultShuttle.cid, resultShuttle.requestIndex)] = resultShuttle
@@ -625,7 +643,7 @@ class Replica(process):
         logger.info("Result Shuttle Received\t\t\t\t\t\t\tfor cid = %d and requestIndex=%d slot_number=%d" %(resultShuttle.cid, resultShuttle.requestIndex,resultShuttle.slot_number))
 
         if self.state == 'Immutable':
-            logger.info("Discarding result shuttle due to Immutable for cid = %d and requestIndex=%d slot_number=%d" %(shuttle.cid, shuttle.requestIndex,shuttle.slot_number))
+            logger.info("Discarding result shuttle due to Immutable for cid = %d and requestIndex=%d slot_number=%d" %(resultShuttle.cid, resultShuttle.requestIndex, resultShuttle.slot_number))
             return      
 
         # drop, crash or sleep
@@ -652,9 +670,7 @@ class Replica(process):
                 logger.info(self.failure_handler.print(failure))
                 return        
 
-            crashOrSleep('completed_checkpoint')
-
-            self.failure_handler.incr('completed_checkpoint')
+            crashOrSleep('completed_checkpoint')            
 
             if not isconsistentCheckpointProof(resultShuttle.slot_number, resultShuttle.checkpoint_proof, self.public_keys):
                 logger.error("Reconfigure: Checkpoint Proof is not valid for ending_slot_number = %d" % (resultShuttle.slot_number))
@@ -665,6 +681,14 @@ class Replica(process):
                 del self.history[:(resultShuttle.slot_number - self.checkpointed_slot)]
                 self.checkpointed_slot = resultShuttle.slot_number
                 self.checkpointStatement = resultShuttle.checkpoint_proof[rnum-1]  
+
+                failure = self.failure_handler.get_failure('completed_checkpoint', 'drop_checkpt_stmts')        
+                if failure is not None:                        
+                    logger.info(self.failure_handler.print(failure))                    
+                    resultShuttle.checkpoint_proof = resultShuttle.checkpoint_proof[self.t+1:]                      
+                    resultShuttle.checkpoint_proof.extend([CheckpointStatement(-1, '', '') for _ in range(self.rnum - self.t)])
+
+            self.failure_handler.incr('completed_checkpoint')
 
         #cache the result shuttle
         resultShuttleCache[(resultShuttle.cid, resultShuttle.requestIndex)] = resultShuttle

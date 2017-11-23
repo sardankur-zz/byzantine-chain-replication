@@ -59,8 +59,16 @@ def isvalidResultProof(opArgs, result, result_proof, public_keys_param):
 
     return True 
 
-def isvalidOrderProof(slot_number, opArgs, order_proof, public_keys_param):
+def isvalidOrderProof(slot_number, opArgs, order_proof, public_keys_param, client_signature = None, client_public_key = None):
     i = 0
+
+    if client_signature is not None:
+        try:
+            client_public_key.verify(client_signature)
+        except Exception:
+            logger.debug("Operation is tampered")
+            return False 
+
     for orderStatement in order_proof:
         if orderStatement is None:
             logger.debug("Order Statement number = %d is missing" % i)

@@ -58,13 +58,14 @@ class Client(process):
         # send client request
         logger.info("Sending request for opArgs = %s and requestIndex = %d" \
             % (workArgs[requestIndex], requestIndex))        
-        send(('client_request', workArgs[requestIndex], cid, requestIndex), to=config.head)
+        opArgsSignature = config.client_private_key.sign(str(workArgs[requestIndex]).encode(encoding='UTF-8'))
+        send(('client_request', workArgs[requestIndex], cid, requestIndex, opArgsSignature), to=config.head)
 
         if(await(some(received(('client_response', result, result_proof, rIndex, config_id)), 
                 has= (rIndex==requestIndex and config_id == config.config_id)))):            
             if not isvalidResultProof(workArgs[requestIndex], result, result_proof, config.public_keys):
                 logger.error("Reconfigure: Result Proof is not valid for rIndex = %d" % rIndex)
-                send(('reconfigure_client_request', result_proof, result), to=olympus)                                
+                send(('reconfigure_client_request', workArgs[requestIndex], result_proof, result), to=olympus)                                
                 return 'Reconfigure'
             
             else:
@@ -79,15 +80,17 @@ class Client(process):
             
             logger.info("Retransmitting request for opArgs = %s and requestIndex = %d" \
                 % (workArgs[requestIndex], requestIndex))
+
+            opArgsSignature = config.client_private_key.sign(str(workArgs[requestIndex]).encode(encoding='UTF-8'))
             for replica in config.replicas:
-                send(('client_retransmit_request', workArgs[requestIndex], cid, requestIndex), to=replica)
+                send(('client_retransmit_request', workArgs[requestIndex], cid, requestIndex, opArgsSignature), to=replica)
 
 
             if(await(some(received(('client_retransmit_response', result, result_proof, rIndex, config_id)), 
                     has= (rIndex==requestIndex and config_id == config.config_id)))):
                 if not isvalidResultProof(workArgs[requestIndex], result, result_proof, config.public_keys):
                     logger.error("Reconfigure: Result Proof is not valid for rIndex = %d" % rIndex)
-                    send(('reconfigure_client_request', result_proof, result), to=olympus)
+                    send(('reconfigure_client_request', workArgs[requestIndex], result_proof, result), to=olympus)
                     return 'Reconfigure'
                 else :
                     logger.info("Retransmit response received for opArgs = %s and requestIndex %d" \
@@ -99,7 +102,7 @@ class Client(process):
                     return 'Reconfigure'                
 
                 logger.error("Reconfigure: Client_Retransmit_request timed out: Request number : %d " % requestIndex)
-                send(('reconfigure_client_request', None, None), to=olympus)
+                send(('reconfigure_client_request', None, None, None), to=olympus)
                 return 'Reconfigure'
 
 
@@ -107,7 +110,7 @@ class Client(process):
         
         self.latest_config = config
 
-        if result is not None:
+        if lastRequestIndex == self.requestIndex:
             logger.info("Response received from Olympus for opArgs = %s and requestIndex %d" \
                     % (self.workArgs[lastRequestIndex], lastRequestIndex)) 
             
