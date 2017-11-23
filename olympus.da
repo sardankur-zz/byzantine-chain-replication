@@ -2,16 +2,17 @@ import json
 import nacl.signing
 import time
 import os
-from utils import *
 import copy
 import itertools
 
 app_logging = import_da("app_logging")
 replica = import_da("replica")
 common = import_da("common")
+utils = import_da("utils")
 
 from common import *
 from replica import *
+from utils import *
 
 logger = app_logging.get_logger("OLYMPUS")
 
@@ -177,7 +178,7 @@ class Olympus(process):
         for rid in histories:
             history = histories[rid]            
             for order_proof in history:
-                if not isvalidOrderProof(order_proof[0].slot_number, order_proof[0].operation, order_proof, self.configs[len(self.configs) - 1].public_keys):
+                if not isvalidOrderProof(order_proof[0].slot_number, order_proof[0].operation, order_proof, self.latest_config.public_keys):
                     logger.info('Removing rid = %d from quorum selection for having invalid order proof history' %rid)
                     rids_for_deletion.append(rid)                    
                     break
@@ -262,6 +263,11 @@ class Olympus(process):
         logger.info("CONFIG : Creating new CONFIGURATION = %d", len(self.configs))        
 
         config = Config()        
+
+        #client key
+        clientSigningKey = nacl.signing.SigningKey.generate()                                
+        config.client_private_key = clientSigningKey
+        config.client_public_key = clientSigningKey.verify_key
         
         # initializing replicas
         config.replicas = []
@@ -271,7 +277,8 @@ class Olympus(process):
             signingKey = nacl.signing.SigningKey.generate()                                
             config.private_keys.append(signingKey)
             config.public_keys.append(signingKey.verify_key)   
-            config.replicas.append(replica)        
+            config.replicas.append(replica)                
+
         
         config.head = config.replicas[0]
         config.tail = config.replicas[len(config.replicas) - 1]                        
@@ -280,14 +287,15 @@ class Olympus(process):
         logger.info("CONFIG : Creating replicas for configuration = %d" % config.config_id)
         for i in range(2*t + 1):
             setup(config.replicas[i], (head_timeout, nonhead_timeout, i, config.config_id, checkpointed_slot, checkpointStatement, slot_number, client_requests, dictionary,
-                self, config.replicas, config.private_keys[i], config.public_keys, failure_cases.get(str(i), []), checkpoint_trigger))                        
+                self, config.replicas, config.private_keys[i], config.public_keys, failure_cases.get(str(i), []), checkpoint_trigger, config.client_public_key))                        
             start(config.replicas[i])                
 
         self.configs.append(config)
-        self.latest_config = config
+        self.latest_config = config        
 
         #send latest configuration to clients
         for cid in clients:
+            
             result = None
             if last_rIndex.get(cid, None) is not None:               
                 send(('new_configuration', self.latest_config, last_rIndex[cid], None), to=clients[cid])
