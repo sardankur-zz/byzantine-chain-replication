@@ -36,6 +36,9 @@ class Failure():
             return self.trackers[tracker].get(str(n), 0)
         else:
             return self.trackers[tracker]
+
+    def set(self, tracker, n):
+        self.trackers[tracker] = n
     
     def get_failure(self, triggers, operations, cid = None):
                 

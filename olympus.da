@@ -52,10 +52,10 @@ class Olympus(process):
             send(('latest_configuration_response', self.latest_config), to=p)
 
 
-    def receive(msg=('reconfigure_client_request', result_proof, result), from_=p):
+    def receive(msg=('reconfigure_client_request', opArgs, result_proof, result), from_=p):
         logger.info("Received Reconfigure Request from client")
         if(result_proof is None or 
-          not isvalidResultProof(result_proof[0].operation, result, result_proof, self.latest_config.public_keys)):
+          not isvalidResultProof(opArgs, result, result_proof, self.latest_config.public_keys)):
             logger.info("Forwarding client request with valid proof of misbehavior for Reconfiguration")
             send(('reconfigure', self.latest_config.config_id), to=self)
 
@@ -92,13 +92,15 @@ class Olympus(process):
         valid_history = copy.copy(self.order_proof_history)
         filter_invalid_order_proof_history(valid_history)
         
-        logger.info("Quorum: Attempting Quorum on valid history") 
+        logger.info("Quorum: Removing replicas with invalid history") 
         Q_list = sorted(list(itertools.combinations(list(valid_history.keys()), self.t+1)))
         Q_list = list(map(lambda x: sorted(x), Q_list))
 
         print(Q_list)
 
         for quorum in Q_list:
+
+            logger.info("Quorum: Attempting Quorum = %s on valid history" % quorum) 
 
             if not isconsistentCheckpointStatements(quorum):
                 logger.info("Quorum: doesn't have consistent checkpoints in quorum %s" % quorum)
@@ -143,7 +145,7 @@ class Olympus(process):
                 continue               
             
 
-            if(not isRunningStateValid(running_state, self.caught_up_statement[longest_history_replica])):
+            if(not isvalidRunningState(running_state, self.caught_up_statement[longest_history_replica])):
                 logger.info("Quorum: Quorum:State hash is not consistent with Running state, Attempting new quorum")
                 continue                    
             logger.info('Quorum: Running state is valid with result hash')
@@ -222,7 +224,7 @@ class Olympus(process):
                 
         return True
 
-    def isRunningStateValid(running_state, caught_up_statement):
+    def isvalidRunningState(running_state, caught_up_statement):
         if caught_up_statement is None or running_state is None:
             logger.info('Quorum: Running state is None')
             return False

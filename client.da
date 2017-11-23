@@ -64,7 +64,7 @@ class Client(process):
                 has= (rIndex==requestIndex and config_id == config.config_id)))):            
             if not isvalidResultProof(workArgs[requestIndex], result, result_proof, config.public_keys):
                 logger.error("Reconfigure: Result Proof is not valid for rIndex = %d" % rIndex)
-                send(('reconfigure_client_request', result_proof, result), to=olympus)                                
+                send(('reconfigure_client_request', workArgs[requestIndex], result_proof, result), to=olympus)                                
                 return 'Reconfigure'
             
             else:
@@ -87,7 +87,7 @@ class Client(process):
                     has= (rIndex==requestIndex and config_id == config.config_id)))):
                 if not isvalidResultProof(workArgs[requestIndex], result, result_proof, config.public_keys):
                     logger.error("Reconfigure: Result Proof is not valid for rIndex = %d" % rIndex)
-                    send(('reconfigure_client_request', result_proof, result), to=olympus)
+                    send(('reconfigure_client_request', workArgs[requestIndex], result_proof, result), to=olympus)
                     return 'Reconfigure'
                 else :
                     logger.info("Retransmit response received for opArgs = %s and requestIndex %d" \
@@ -99,7 +99,7 @@ class Client(process):
                     return 'Reconfigure'                
 
                 logger.error("Reconfigure: Client_Retransmit_request timed out: Request number : %d " % requestIndex)
-                send(('reconfigure_client_request', None, None), to=olympus)
+                send(('reconfigure_client_request', None, None, None), to=olympus)
                 return 'Reconfigure'
 
 
