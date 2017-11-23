@@ -97,9 +97,7 @@ class Olympus(process):
         
         logger.info("Quorum: Removing replicas with invalid history") 
         Q_list = sorted(list(itertools.combinations(list(valid_history.keys()), self.t+1)))
-        Q_list = list(map(lambda x: sorted(x), Q_list))
-
-        print(Q_list)
+        Q_list = list(map(lambda x: sorted(x), Q_list))        
 
         for quorum in Q_list:
 
@@ -193,8 +191,7 @@ class Olympus(process):
                 return False
         return True        
 
-    def isValidQuorum(hist):
-        print(hist)
+    def isValidQuorum(hist):        
         n = len(hist)      #length of quorum
         m = len(hist[n-1]) #length of shortest history
         for i in range(m):
@@ -319,9 +316,13 @@ class Olympus(process):
         replica_state = None
 
         if (await(len(setof(p, received(('replica_shut', replica_state), from_=p))) == len(replicas))):
-            logger.info("Replicas are shut")
             
-            replica_states = setof(replica_state, received(('replica_shut', replica_state), from_=p))        
+            logger.info("Replicas are shut")
+
+            time.sleep(0.1)
+
+            replica_states = setof(replica_state, received(('replica_shut', replica_state), from_=p))                            
+
             deserialized_states = []
             for replica_state in replica_states:
                 replica_state = json.loads(replica_state)

@@ -717,7 +717,7 @@ class Replica(process):
 
 
     def receive(msg=('replica_shutdown'), from_=p):
-        logger.info("Request for shutdown")
+        logger.info("Request for shutdown")            
         send(('replica_shut', str(ReplicaState(self.rid, self.dictionary))), to=p)
         self.on = False
 
