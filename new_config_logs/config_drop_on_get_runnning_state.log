@@ -1,0 +1,156 @@
+2017-11-22 23:48:55,339 :  INFO :      MAIN : Reading Configuration
+2017-11-22 23:48:55,545 :  INFO :      MAIN : Creating olympus
+2017-11-22 23:48:55,575 :  INFO :      MAIN : Creating clients
+2017-11-22 23:48:55,592 :  INFO : CLIENT  0 : Setup Completed
+2017-11-22 23:48:55,593 :  INFO : CLIENT  0 : Running
+2017-11-22 23:48:55,595 :  INFO :      MAIN : Starting olympus
+2017-11-22 23:48:55,596 :  INFO :   OLYMPUS : Setup Completed
+2017-11-22 23:48:55,598 :  INFO :   OLYMPUS : Running
+2017-11-22 23:48:55,599 :  INFO :   OLYMPUS : CONFIG : Creating new CONFIGURATION = 0
+2017-11-22 23:48:55,697 :  INFO :   OLYMPUS : CONFIG : Creating replicas for configuration = 0
+2017-11-22 23:48:55,739 :  INFO : REPLICA 0 : Setup Completed
+2017-11-22 23:48:55,743 :  INFO : REPLICA 0 : Running
+2017-11-22 23:48:55,787 :  INFO : REPLICA 1 : Setup Completed
+2017-11-22 23:48:55,789 :  INFO : REPLICA 1 : Running
+2017-11-22 23:48:55,836 :  INFO : REPLICA 2 : Setup Completed
+2017-11-22 23:48:55,837 :  INFO : REPLICA 2 : Running
+2017-11-22 23:48:55,884 :  INFO : REPLICA 3 : Setup Completed
+2017-11-22 23:48:55,886 :  INFO : REPLICA 3 : Running
+2017-11-22 23:48:55,933 :  INFO : REPLICA 4 : Setup Completed
+2017-11-22 23:48:55,935 :  INFO : REPLICA 4 : Running
+2017-11-22 23:48:55,936 :  INFO : CLIENT  0 : Sending request for opArgs = put - movie - star and requestIndex = 0
+2017-11-22 23:48:55,938 :  INFO : REPLICA 0 : Client request for cid = 0 requestIndex = 0 received with op args put - movie - star
+2017-11-22 23:48:55,941 :  INFO : REPLICA 0 : Shuttle Started								for cid = 0 and requestIndex=0 slot_number=0
+2017-11-22 23:48:55,942 :  INFO : REPLICA 1 : Shuttle Received								for cid = 0 and requestIndex=0 slot_number=0
+2017-11-22 23:48:55,943 :  INFO : REPLICA 1 : FAILURE : shuttle ['0', '0'] change_operation ['']
+2017-11-22 23:48:55,944 :  INFO : REPLICA 1 : Shuttle Forwarded								for cid = 0 and requestIndex=0 slot_number=0
+2017-11-22 23:48:55,945 :  INFO : REPLICA 2 : Shuttle Received								for cid = 0 and requestIndex=0 slot_number=0
+2017-11-22 23:48:55,949 : DEBUG :      UTIL : Operation is tampered
+2017-11-22 23:48:55,950 : ERROR : REPLICA 2 : Reconfigure: Order Proof is not valid cid = 0 requestIndex = 0 slot_number = 0
+2017-11-22 23:48:55,951 :  INFO :   OLYMPUS : Reconfigure: Processing Reconfigure Request
+2017-11-22 23:48:55,951 :  INFO :   OLYMPUS : Reconfigure: Sending wedge requests to all replicas
+2017-11-22 23:48:55,953 :  INFO : REPLICA 1 : Received Wedge Request
+2017-11-22 23:48:55,953 :  INFO :   OLYMPUS : Reconfigure: Awaiting wedged responses from all replicas
+2017-11-22 23:48:55,953 :  INFO : REPLICA 2 : Received Wedge Request
+2017-11-22 23:48:55,953 :  INFO : REPLICA 0 : Received Wedge Request
+2017-11-22 23:48:55,953 :  INFO : REPLICA 3 : Received Wedge Request
+2017-11-22 23:48:55,954 :  INFO : REPLICA 4 : Received Wedge Request
+2017-11-22 23:48:55,956 :  INFO :   OLYMPUS : Reconfigure: Received wedged response from 5 replicas
+2017-11-22 23:48:55,956 : DEBUG :      UTIL : opArgs for Order Statement number = 1 is not valid
+2017-11-22 23:48:55,957 :  INFO :   OLYMPUS : Removing rid = 1 from quorum selection for having invalid order proof history
+2017-11-22 23:48:55,957 :  INFO :   OLYMPUS : Quorum: Removing replicas with invalid history
+2017-11-22 23:48:55,957 :  INFO :   OLYMPUS : Quorum: Attempting Quorum = [0, 3, 4] on valid history
+2017-11-22 23:48:55,958 :  INFO :   OLYMPUS : Quorum: Checkpoints are consistent
+2017-11-22 23:48:55,958 :  INFO :   OLYMPUS : Quorum: Quorum is valid
+2017-11-22 23:48:55,959 :  INFO : REPLICA 0 : Received Catch_Up Request
+2017-11-22 23:48:55,960 :  INFO : REPLICA 4 : Received Catch_Up Request
+2017-11-22 23:48:55,960 :  INFO : REPLICA 3 : Received Catch_Up Request
+2017-11-22 23:48:55,962 :  INFO :   OLYMPUS : Quorum: received all/some caught_up responses
+2017-11-22 23:48:55,962 :  INFO :   OLYMPUS : Quorum: Get running state from replica
+2017-11-22 23:48:55,963 :  INFO : REPLICA 0 : Received Get_Running_State Request
+2017-11-22 23:48:55,964 :  INFO : REPLICA 0 : FAILURE : get_running_state ['0'] drop ['']
+2017-11-22 23:48:58,939 :  INFO : CLIENT  0 : Retransmitting request for opArgs = put - movie - star and requestIndex = 0
+2017-11-22 23:48:58,942 :  INFO : REPLICA 0 : Received Retransmit request for cid = 0 requestIndex = 0 received with op args put - movie - star
+2017-11-22 23:48:58,943 :  INFO : REPLICA 1 : Received Retransmit request for cid = 0 requestIndex = 0 received with op args put - movie - star
+2017-11-22 23:48:58,943 :  INFO : REPLICA 2 : Received Retransmit request for cid = 0 requestIndex = 0 received with op args put - movie - star
+2017-11-22 23:48:58,943 :  INFO : REPLICA 0 : Discarding retransmit request due to Immutable for cid = 0 requestIndex = 0 received with op args put - movie - star
+2017-11-22 23:48:58,944 :  INFO : REPLICA 3 : Received Retransmit request for cid = 0 requestIndex = 0 received with op args put - movie - star
+2017-11-22 23:48:58,944 :  INFO : REPLICA 1 : Discarding retransmit request due to Immutable for cid = 0 requestIndex = 0 received with op args put - movie - star
+2017-11-22 23:48:58,944 :  INFO : REPLICA 2 : Discarding retransmit request due to Immutable for cid = 0 requestIndex = 0 received with op args put - movie - star
+2017-11-22 23:48:58,944 :  INFO : REPLICA 3 : Discarding retransmit request due to Immutable for cid = 0 requestIndex = 0 received with op args put - movie - star
+2017-11-22 23:48:58,945 :  INFO : REPLICA 4 : Received Retransmit request for cid = 0 requestIndex = 0 received with op args put - movie - star
+2017-11-22 23:48:58,946 :  INFO : REPLICA 4 : Discarding retransmit request due to Immutable for cid = 0 requestIndex = 0 received with op args put - movie - star
+2017-11-22 23:48:58,963 :  INFO :   OLYMPUS : Quorum: Timed out on waiting for running state, Attempting new quorum
+2017-11-22 23:48:58,964 :  INFO :   OLYMPUS : Quorum: Attempting Quorum = [0, 2, 3] on valid history
+2017-11-22 23:48:58,965 :  INFO :   OLYMPUS : Quorum: Checkpoints are consistent
+2017-11-22 23:48:58,965 :  INFO :   OLYMPUS : Quorum: Quorum is valid
+2017-11-22 23:48:58,967 :  INFO : REPLICA 0 : Received Catch_Up Request
+2017-11-22 23:48:58,968 :  INFO : REPLICA 2 : Received Catch_Up Request
+2017-11-22 23:48:58,968 :  INFO : REPLICA 3 : Received Catch_Up Request
+2017-11-22 23:48:58,970 :  INFO :   OLYMPUS : Quorum: received all/some caught_up responses
+2017-11-22 23:48:58,971 :  INFO :   OLYMPUS : Quorum: Get running state from replica
+2017-11-22 23:48:58,973 :  INFO : REPLICA 0 : Received Get_Running_State Request
+2017-11-22 23:48:58,974 :  INFO :   OLYMPUS : Quorum: Running state received {'movie': 'star'}
+2017-11-22 23:48:58,974 :  INFO :   OLYMPUS : Quorum: Running state is valid with result hash
+2017-11-22 23:48:58,975 :  INFO :   OLYMPUS : Quorum: cleaning up old replicas
+2017-11-22 23:48:58,976 :  INFO : REPLICA 0 : Force Shut
+2017-11-22 23:48:58,976 :  INFO : REPLICA 1 : Force Shut
+2017-11-22 23:48:58,977 :  INFO : REPLICA 2 : Force Shut
+2017-11-22 23:48:58,976 :  INFO :   OLYMPUS : Quorum: starting with checkpointed_slot -1 checkpointedstatement None
+2017-11-22 23:48:58,981 :  INFO :   OLYMPUS : CONFIG : Creating new CONFIGURATION = 1
+2017-11-22 23:48:58,982 :  INFO : REPLICA 3 : Force Shut
+2017-11-22 23:48:58,982 :  INFO : REPLICA 4 : Force Shut
+2017-11-22 23:48:59,071 :  INFO :   OLYMPUS : CONFIG : Creating replicas for configuration = 1
+2017-11-22 23:48:59,115 :  INFO : REPLICA 0 : Setup Completed
+2017-11-22 23:48:59,117 :  INFO : REPLICA 0 : Running
+2017-11-22 23:48:59,161 :  INFO : REPLICA 1 : Setup Completed
+2017-11-22 23:48:59,163 :  INFO : REPLICA 1 : Running
+2017-11-22 23:48:59,207 :  INFO : REPLICA 2 : Setup Completed
+2017-11-22 23:48:59,209 :  INFO : REPLICA 2 : Running
+2017-11-22 23:48:59,252 :  INFO : REPLICA 3 : Setup Completed
+2017-11-22 23:48:59,254 :  INFO : REPLICA 3 : Running
+2017-11-22 23:48:59,302 :  INFO : REPLICA 4 : Setup Completed
+2017-11-22 23:48:59,303 :  INFO : REPLICA 4 : Running
+2017-11-22 23:48:59,304 :  INFO : CLIENT  0 : Response received from Olympus for opArgs = put - movie - star and requestIndex 0
+2017-11-22 23:48:59,305 :  INFO : CLIENT  0 : Sending request for opArgs = append - movie -  wars and requestIndex = 1
+2017-11-22 23:48:59,306 :  INFO : REPLICA 0 : Client request for cid = 0 requestIndex = 1 received with op args append - movie -  wars
+2017-11-22 23:48:59,307 :  INFO : REPLICA 0 : Shuttle Started								for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,308 :  INFO : REPLICA 1 : Shuttle Received								for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,309 :  INFO : REPLICA 1 : Shuttle Forwarded								for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,314 :  INFO : REPLICA 2 : Shuttle Received								for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,315 :  INFO : REPLICA 2 : Shuttle Forwarded								for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,317 :  INFO : REPLICA 3 : Shuttle Received								for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,318 :  INFO : REPLICA 3 : Shuttle Forwarded								for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,320 :  INFO : REPLICA 4 : Shuttle Received								for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,321 :  INFO : REPLICA 4 : Client Response sent to cid = 0
+2017-11-22 23:48:59,323 :  INFO : REPLICA 4 : Result Shuttle Started							for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,323 :  INFO : CLIENT  0 : Response received for opArgs = append - movie -  wars and requestIndex 1
+2017-11-22 23:48:59,324 :  INFO : CLIENT  0 : Sending request for opArgs = get - movie - None and requestIndex = 2
+2017-11-22 23:48:59,324 :  INFO : REPLICA 3 : Result Shuttle Received							for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,325 :  INFO : REPLICA 0 : Client request for cid = 0 requestIndex = 2 received with op args get - movie - None
+2017-11-22 23:48:59,325 :  INFO : REPLICA 3 : Result Shuttle Forwarded							for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,326 :  INFO : REPLICA 0 : Shuttle Started								for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:48:59,327 :  INFO : REPLICA 2 : Result Shuttle Received							for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,327 :  INFO : REPLICA 1 : Shuttle Received								for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:48:59,329 :  INFO : REPLICA 1 : Shuttle Forwarded								for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:48:59,329 :  INFO : REPLICA 2 : Result Shuttle Forwarded							for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,330 :  INFO : REPLICA 1 : Result Shuttle Received							for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,331 :  INFO : REPLICA 2 : Shuttle Received								for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:48:59,332 :  INFO : REPLICA 1 : Result Shuttle Forwarded							for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,332 :  INFO : REPLICA 2 : Shuttle Forwarded								for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:48:59,335 :  INFO : REPLICA 0 : Result Shuttle Received							for cid = 0 and requestIndex=1 slot_number=1
+2017-11-22 23:48:59,338 :  INFO : REPLICA 3 : Shuttle Received								for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:48:59,340 :  INFO : REPLICA 3 : Shuttle Forwarded								for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:48:59,342 :  INFO : REPLICA 4 : Shuttle Received								for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:48:59,344 :  INFO : REPLICA 4 : Client Response sent to cid = 0
+2017-11-22 23:48:59,345 :  INFO : CLIENT  0 : Response received for opArgs = get - movie - None and requestIndex 2
+2017-11-22 23:48:59,345 :  INFO : REPLICA 4 : Result Shuttle Started							for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:48:59,362 :  INFO : REPLICA 3 : Result Shuttle Received							for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:48:59,364 :  INFO : REPLICA 3 : Result Shuttle Forwarded							for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:48:59,365 :  INFO : REPLICA 2 : Result Shuttle Received							for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:48:59,366 :  INFO : REPLICA 2 : Result Shuttle Forwarded							for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:48:59,367 :  INFO : REPLICA 1 : Result Shuttle Received							for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:48:59,369 :  INFO : REPLICA 1 : Result Shuttle Forwarded							for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:48:59,370 :  INFO : REPLICA 0 : Result Shuttle Received							for cid = 0 and requestIndex=2 slot_number=2
+2017-11-22 23:49:02,327 :  INFO : CLIENT  0 : Terminated
+2017-11-22 23:49:02,328 :  INFO :      MAIN : Clients are shut
+2017-11-22 23:49:02,330 :  INFO :   OLYMPUS : Request for shutdown
+2017-11-22 23:49:02,331 :  INFO : REPLICA 0 : Request for shutdown
+2017-11-22 23:49:02,332 :  INFO : REPLICA 1 : Request for shutdown
+2017-11-22 23:49:02,332 :  INFO : REPLICA 2 : Request for shutdown
+2017-11-22 23:49:02,333 :  INFO : REPLICA 3 : Request for shutdown
+2017-11-22 23:49:02,333 :  INFO : REPLICA 0 : Terminated
+2017-11-22 23:49:02,333 :  INFO : REPLICA 1 : Terminated
+2017-11-22 23:49:02,333 :  INFO : REPLICA 2 : Terminated
+2017-11-22 23:49:02,334 :  INFO : REPLICA 3 : Terminated
+2017-11-22 23:49:02,337 :  INFO : REPLICA 4 : Request for shutdown
+2017-11-22 23:49:02,338 :  INFO : REPLICA 4 : Terminated
+2017-11-22 23:49:02,339 :  INFO :   OLYMPUS : Replicas are shut
+2017-11-22 23:49:02,442 :  INFO :   OLYMPUS : Terminated
+2017-11-22 23:49:02,443 :  INFO :      MAIN : Replica rid=3 matches test scenario = {'movie': 'star wars'}
+2017-11-22 23:49:02,443 :  INFO :      MAIN : Replica rid=2 matches test scenario = {'movie': 'star wars'}
+2017-11-22 23:49:02,443 :  INFO :      MAIN : Replica rid=4 matches test scenario = {'movie': 'star wars'}
+2017-11-22 23:49:02,443 :  INFO :      MAIN : Replica rid=0 matches test scenario = {'movie': 'star wars'}
+2017-11-22 23:49:02,444 :  INFO :      MAIN : Replica rid=1 matches test scenario = {'movie': 'star wars'}
+2017-11-22 23:49:02,444 :  INFO :      MAIN : Olympus is shut
+2017-11-22 23:49:02,444 :  INFO :      MAIN : Terminating
