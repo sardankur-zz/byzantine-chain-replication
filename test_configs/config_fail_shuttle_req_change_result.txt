@@ -12,10 +12,10 @@ head_timeout = 3000
 nonhead_timeout = 3000
 
 # CLIENT WORKLOAD
-workload[0] = put('movie','star'); append('movie',' wars'); get('movie')
+workload[0] = put('movie','star'); append('movie',' wars'); append('movie',' won')
 
 # TEST
-test_workload = {'movie': 'star wars'}
+test_workload = {'movie': 'star wars won'}
 
 # FAILURE SCENARIO
 # only makes sense for replicas other than head.
