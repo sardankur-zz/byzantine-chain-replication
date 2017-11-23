@@ -137,7 +137,7 @@ class Olympus(process):
 
             clk = logical_clock()
 
-            send(('get_running_state'), to= replicas[longest_history_replica])                        
+            send(('get_running_state'), to= replicas[longest_history_replica])                                    
             if(await(some(received(('running_state', slot_number, client_requests, running_state, last_rIndex), clk=rclk), has= (rclk > clk)))):
                 logger.info("Quorum: Running state received %s" % running_state)
                 pass
@@ -149,6 +149,7 @@ class Olympus(process):
             if(not isvalidRunningState(running_state, self.caught_up_statement[longest_history_replica])):
                 logger.info("Quorum: Quorum:State hash is not consistent with Running state, Attempting new quorum")
                 continue                    
+                
             logger.info('Quorum: Running state is valid with result hash')
 
             logger.info('Quorum: cleaning up old replicas')    
