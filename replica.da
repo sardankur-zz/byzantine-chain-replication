@@ -591,7 +591,6 @@ class Replica(process):
 
                 crashOrSleep('completed_checkpoint')                
 
-
                 if not isconsistentCheckpointProof(resultShuttle.slot_number, resultShuttle.checkpoint_proof, self.public_keys):
                     logger.error("Reconfigure: Checkpoint Proof is not valid for ending_slot_number = %d" % (resultShuttle.slot_number))
                     send(('reconfigure', config_id), to=olympus)
@@ -606,7 +605,7 @@ class Replica(process):
                     if failure is not None:                        
                         logger.info(self.failure_handler.print(failure))
                         resultShuttle.checkpoint_proof = resultShuttle.checkpoint_proof[self.t+1:]                      
-                    resultShuttle.checkpoint_proof.extend([CheckpointStatement(-1, '', '') for _ in range(self.rnum - self.t)])
+                        resultShuttle.checkpoint_proof.extend([CheckpointStatement(-1, '', '') for _ in range(self.rnum - self.t)])
 
                 self.failure_handler.incr('completed_checkpoint')
 
@@ -673,7 +672,7 @@ class Replica(process):
             crashOrSleep('completed_checkpoint')            
 
             if not isconsistentCheckpointProof(resultShuttle.slot_number, resultShuttle.checkpoint_proof, self.public_keys):
-                logger.error("Reconfigure: Checkpoint Proof is not valid for ending_slot_number = %d" % (resultShuttle.slot_number))
+                logger.error("Reconfigure: Checkpoint Proof is not consistent for ending_slot_number = %d" % (resultShuttle.slot_number))
                 send(('reconfigure', config_id), to=olympus)
                 return    
             else:
@@ -683,7 +682,7 @@ class Replica(process):
                 self.checkpointStatement = resultShuttle.checkpoint_proof[rnum-1]  
 
                 failure = self.failure_handler.get_failure('completed_checkpoint', 'drop_checkpt_stmts')        
-                if failure is not None:                        
+                if failure is not None:                     
                     logger.info(self.failure_handler.print(failure))                    
                     resultShuttle.checkpoint_proof = resultShuttle.checkpoint_proof[self.t+1:]                      
                     resultShuttle.checkpoint_proof.extend([CheckpointStatement(-1, '', '') for _ in range(self.rnum - self.t)])
