@@ -129,7 +129,7 @@ class Replica(process):
     def receive(msg=('get_running_state'), from_=p):
         logger.info("Received Get_Running_State Request") 
 
-        failure = self.failure_handler.get_failure('get_running_state', 'get_running_state')        
+        failure = self.failure_handler.get_failure('get_running_state', 'drop')        
         if failure is not None:
             self.failure_handler.incr('get_running_state')
             logger.info(self.failure_handler.print(failure))
