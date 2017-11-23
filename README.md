@@ -39,16 +39,15 @@ Generates request using random number given a particular seed.
 ===========================================================================
 BUGS AND LIMITATIONS:
 ===========================================================================
- 1. Limitations: Couldn't really send big messages due to underlying DistAlgo library doesn't allow messages bigger than the limit
- 2. Limitations: Couldn't really spawn large number of replicas (more than 5) since rhe shuttles get big enough to surpass the message size limit
- 3. Limitations: limitations in testing all the functionality(for phase 2) due to lack of fault injection variety (available at phase 2 level)
- 4. Limitations: Could not test on multiple hosts because IP address could not be assigned at remote host.
-
+ 1. Limitations: Could not test on multiple hosts because IP address could not be assigned at remote host.
+ 
 ===========================================================================
 CONTRIBUTIONS:
 ===========================================================================
 
+
 1. Ankur Sarda:
+PHASE 1:
     Client Functionality Implementation 
     Olympus Functionality Implementation
     Logging Functionality Implementation
@@ -57,8 +56,14 @@ CONTRIBUTIONS:
     Operations on dictionary Implementation
     Generating test case scenarios
     Generating Pseudorandom workload
+PHASE 2:
+	Creating and validating quorum in olympus --shared contribution
+	Cretaing and setting up new replicas with running state in the reconfiguration 
+	All new 6 fault triggers
+	All new 9 fault injections
 
 2. Shantanu Patil:
+PHASE 1:
 	Replica Functionality Implementation
 	Basic data Structures Creation (eg. statement, proofs, shuttles)
 	Cryptographic Hashing and Verification
@@ -68,8 +73,13 @@ CONTRIBUTIONS:
 	Parsing and Creating Operation Arguments
 	Verfying and Debugging test case scenarios
 	Writing this Readme :D
-
-
+PHASE 2:
+	Creating and validating quorum in olympus --shared contribution
+	Computing the running state hash and checkpoint proof for new configuration
+	Triggering, creating Checkpointing Shuttle
+	Validating and deleting checkpointing Shuttle 
+	Writing this Readme :D
+	
 ===========================================================================
 MAIN FILES:
 ===========================================================================
@@ -106,7 +116,7 @@ Markdown                         1             21              0            106
 SUM:                            17            621              8           3100
 -------------------------------------------------------------------------------
 Text Files(other)                1             20            120              0
-Config Files(other)             30             60            450  			  0
+Config Files(other)             30            200            650  			  0
 -------------------------------------------------------------------------------
 SUM:                            21            359            321            788
 -------------------------------------------------------------------------------
