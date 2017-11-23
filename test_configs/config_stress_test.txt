@@ -10,10 +10,11 @@ client_timeout = 3000
 
 head_timeout = 3000
 nonhead_timeout = 3000
+checkpoint_trigger = 10
 
 # CLIENT WORKLOAD
-workload[0] = pseudorandom(10, 1000)
-workload[1] = pseudorandom(11, 1000)
+workload[0] = pseudorandom(10, 100)
+workload[1] = pseudorandom(11, 100)
 
 # TEST
 # No test required for pseudo random
